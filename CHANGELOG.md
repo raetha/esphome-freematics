@@ -4,15 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-First release: ESPHome on the Freematics ONE+ Model B in place of the stock telelogger firmware, with Home Assistant as the backend and cellular data kept to a minimum. This first cut proves the cellular link and live GPS; offline caching and OBD data follow.
+First release: ESPHome on the Freematics ONE+ Model B in place of the stock telelogger firmware, reporting GPS tracks to Traccar in a compact, acknowledged format (about 12 KB per hour of driving), or live to Home Assistant. Vehicle data and SD card caching follow; the vehicle bus is only ever listened to.
 
 ### Added
 
 - A board package for the Freematics ONE+ Model B (`packages/freematics-oneplus-b.yaml`): the cellular modem over LTE (SIM7070G by default; the power key is pressed until the module answers), the pins of the co-processor link, microSD and battery sense, and diagnostics in Home Assistant (cellular signal, heap, uptime, reset reason, battery voltage), each sent only on a real change.
-- Live GPS from the dongle's internal receiver (read through the co-processor) as latitude, longitude, speed, satellites and fix entities, sent only when the car has moved about 10 m; a template device tracker in Home Assistant turns them into a tracker (docs/home-assistant.md).
-- The native API dials Home Assistant from the device (Home Assistant 2026.10 or later), so it keeps working from LTE behind the carrier's NAT, with state updates batched to save data.
-- An example device config with Wi-Fi preferred over LTE and a WireGuard tunnel home, so nothing at home is exposed to the internet.
-- Buttons that send diagnostic commands to the modem and the co-processor, with the replies in the device log.
+- GPS from the dongle's internal receiver, read through the co-processor.
+- Traccar configuration (`examples/car-traccar.yaml`, the `traccar_uplink` component): fixes go to Traccar as Teltonika GH3000 records over UDP, about 17 bytes each. A record every 10 s while moving and on every sharp turn, one when a trip starts and stops (after 3 minutes below 6 km/h), and a heartbeat every 15 minutes while parked, with battery voltage on starts, stops and heartbeats; all adjustable. Records are batched every minute, Traccar acknowledges each batch, and unacknowledged records are kept (up to 300) and sent again, so coverage gaps lose nothing. A Traccar device that used the Freematics protocol keeps its identifier.
+- Home Assistant configuration (`examples/car-home-assistant.yaml`): the native API dialled from the device (Home Assistant 2026.10 or later) through a WireGuard tunnel, with latitude, longitude, speed and diagnostics sent only on real changes, and a template device tracker in Home Assistant (docs/home-assistant.md). Uses far more data than the Traccar configuration (docs/configurations.md).
+- Wi-Fi first: while a known Wi-Fi network is connected LTE is switched off, and it comes back when Wi-Fi drops.
+- Nothing is sent to the vehicle bus: only commands the co-processor answers itself.
 
 ### Internal
 

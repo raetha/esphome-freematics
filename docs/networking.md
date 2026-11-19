@@ -1,14 +1,14 @@
 # Networking: Wi-Fi, LTE, WireGuard and data use
 
-Cellular data is the scarcest resource in this project: every design choice is weighed by the bytes it puts on LTE.
+Cellular data is the scarcest resource in this project: every design choice is weighed by the bytes it puts on LTE. Which configuration costs what: [configurations.md](configurations.md). This page covers Wi-Fi and LTE for all of them, and the Home Assistant configuration's tunnel and data use.
 
 ## Wi-Fi first, LTE otherwise
 
-The example config has both `wifi:` and `modem:`. They validate together in ESPHome 2026.11. ESPHome's `network: priority` list can't include the modem yet (only Wi-Fi and Ethernet), so the default route is left to ESP-IDF, which picks the connected interface with the highest route priority: Wi-Fi station 100, PPP 20. So while a known Wi-Fi network is connected, traffic goes over Wi-Fi; otherwise over LTE. Phase 1 confirms this on hardware, including that the API connection comes back when the route moves (a TCP connection opened over one interface breaks when the route changes).
+`packages/wifi-first.yaml` does what the telelogger does: ESPHome keeps looking for the configured Wi-Fi networks, and when one connects, LTE is switched off (`modem.disable`); when Wi-Fi drops for `lte_back_after` (30 s), LTE comes back (`modem.enable`). So nothing goes over LTE while a known network is in range, and the modem isn't attached there either.
 
-The modem stays attached while on Wi-Fi. If that turns out to cost data or power, an automation can disable it while home Wi-Fi is up (`modem.disable` / `modem.enable`).
+`wifi:` and `modem:` validate together in ESPHome 2026.11. ESPHome's `network: priority` can't include the modem yet, so in the moment both are up the default route is ESP-IDF's: the connected interface with the highest route priority (Wi-Fi station 100, PPP 20), which also favours Wi-Fi. Phase 1 confirms the handover on hardware: the Traccar uplink just sends its next packet over whichever link is up; the API connection reconnects.
 
-## Home Assistant connection: native API, dialled from the device
+## Home Assistant configuration: native API, dialled from the device
 
 ESPHome 2026.11's native API can dial Home Assistant itself (`api: outgoing_connection:`, Home Assistant 2026.10 or later, encryption required). So HA never has to reach the dongle behind the carrier's NAT: add the device to HA once while it's on home Wi-Fi, and from then on it remembers HA's address and connects to it, from Wi-Fi or LTE. No MQTT broker is involved. MQTT was considered and dropped for now (below).
 
@@ -56,6 +56,6 @@ So:
 
 While driving the native API is smaller; parked and idle, MQTT's longer keepalive would win, but the answer to parked is to switch the radio off. Neither is the end state.
 
-## The end state: a compact batched uplink
+## The low-data option
 
-Neither the native API nor MQTT can carry timestamps, so offline caching and replay (phase 3) need their own uplink anyway. That's where data use can be cut to the bone: records packed as binary with delta-encoded positions, many fixes per packet, sent every minute or so (or when the queue fills), received by a small Home Assistant custom integration that turns them into the device tracker, live sensors and back-dated statistics. Traccar's binary protocols (Teltonika's, for example) are the alternative receiver: just as dense, but they put the data in Traccar rather than HA's statistics. Decided at phase 3 ([plan.md](plan.md)).
+Neither the native API nor MQTT carries timestamps or batches fixes, so the low-data configuration is the Traccar one: Teltonika GH3000 records over UDP, about 17 bytes per fix, batched and acknowledged, around 12 KB per hour of driving ([configurations.md](configurations.md)).

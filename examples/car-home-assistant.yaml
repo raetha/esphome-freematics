@@ -1,0 +1,51 @@
+# One car reporting live to Home Assistant over the native API, through a
+# WireGuard tunnel home (docs/configurations.md, docs/networking.md).
+# Copy into your ESPHome config folder, rename it, and set the substitutions and
+# secrets. CI validates and compiles it with examples/secrets.example.yaml.
+#
+# To use this repository instead of local copies, replace the !include lines with:
+#   packages:
+#     freematics:
+#       url: https://github.com/raetha/esphome-freematics
+#       ref: dev
+#       files: [packages/freematics-oneplus-b.yaml, packages/wifi-first.yaml, packages/uplink-home-assistant.yaml]
+
+substitutions:
+  name: freematics-car1
+  friendly_name: Car 1
+  cell_apn: hologram
+
+packages:
+  board: !include ../packages/freematics-oneplus-b.yaml
+  wifi_first: !include ../packages/wifi-first.yaml
+  uplink: !include ../packages/uplink-home-assistant.yaml
+
+wifi:
+  networks:
+    - ssid: !secret wifi_home_ssid
+      password: !secret wifi_home_password
+    - ssid: !secret wifi_second_ssid
+      password: !secret wifi_second_password
+
+# The package makes the device dial Home Assistant; the key is per device.
+# Add the device to HA once while it's on home Wi-Fi.
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret ota_encryption_key
+
+# Tunnel home so Home Assistant stays private. Only HA's address goes through
+# it; everything else, including SNTP, goes direct.
+wireguard:
+  address: !secret wg_address
+  private_key: !secret wg_private_key
+  peer_endpoint: !secret wg_endpoint
+  peer_public_key: !secret wg_peer_public_key
+  peer_preshared_key: !secret wg_preshared_key
+  peer_allowed_ips:
+    - !secret wg_allowed_ip       # Home Assistant's address, e.g. 192.168.1.10/32
+  peer_persistent_keepalive: 25s  # sent only when nothing else was; keeps the carrier's NAT open

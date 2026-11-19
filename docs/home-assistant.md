@@ -1,6 +1,6 @@
 # Home Assistant side
 
-What Home Assistant needs for the current phase. No custom integration yet: one comes with offline caching (phase 3, [plan.md](plan.md)).
+What Home Assistant needs for the Home Assistant configuration ([configurations.md](configurations.md)). With the Traccar configuration, Home Assistant sees the cars through its Traccar Server integration instead, and nothing here applies.
 
 ## Adding the dongle
 
@@ -20,4 +20,4 @@ template:
         location_accuracy: 10
 ```
 
-Check the sensor entity IDs in your install. While the dongle is offline the sensors go unavailable and the tracker keeps no position; offline replay comes later.
+Check the sensor entity IDs in your install. While the dongle is offline the sensors go unavailable and the tracker keeps no position: this configuration doesn't replay.

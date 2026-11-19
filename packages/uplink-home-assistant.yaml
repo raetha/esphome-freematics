@@ -1,0 +1,114 @@
+# Report to Home Assistant over the native API, dialled from the device
+# (Home Assistant 2026.10+), usually through a WireGuard tunnel home.
+# Live only: nothing is cached while offline. Uses more data than the Traccar
+# uplink; see docs/configurations.md.
+#
+# Needs the board package. The device config sets api: encryption: key.
+
+substitutions:
+  api_batch_delay: 2s      # state updates within this window share one packet
+
+api:
+  batch_delay: ${api_batch_delay}
+  reboot_timeout: 0s       # never reboot just because HA isn't connected
+  outgoing_connection:
+    delay: 60s
+
+script:
+  - id: on_gnss_fix
+    then:
+      - lambda: |-
+          id(gnss_latitude).publish_state(id(gnss_lat));
+          id(gnss_longitude).publish_state(id(gnss_lon));
+          id(gnss_speed).publish_state(id(gnss_kmh));
+          id(gnss_satellites).publish_state(id(gnss_sats));
+
+# Each sends only on a real change, and at most every 15 minutes otherwise.
+sensor:
+  - id: !extend battery_voltage
+    internal: false
+    name: Battery voltage
+    filters:
+      - multiply: 11.0
+      - or:
+          - throttle: 15min
+          - delta: 0.2
+  - platform: modem
+    rssi:
+      name: Cellular RSSI
+      filters:
+        - or:
+            - throttle: 15min
+            - delta: 4
+  - platform: uptime
+    name: Uptime
+    update_interval: 15min
+  - platform: debug
+    free:
+      name: Free heap
+      filters:
+        - or:
+            - throttle: 15min
+            - delta: 8000
+  # Position goes out only when it moves about 10 m or more.
+  - platform: template
+    id: gnss_latitude
+    name: GNSS latitude
+    accuracy_decimals: 6
+    filters:
+      - delta: 0.0001
+  - platform: template
+    id: gnss_longitude
+    name: GNSS longitude
+    accuracy_decimals: 6
+    filters:
+      - delta: 0.0001
+  - platform: template
+    id: gnss_speed
+    name: GNSS speed
+    unit_of_measurement: km/h
+    accuracy_decimals: 0
+    filters:
+      - delta: 5
+  - platform: template
+    id: gnss_satellites
+    name: GNSS satellites
+    filters:
+      - delta: 2
+
+debug:
+  update_interval: 300s
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: Reset reason
+
+binary_sensor:
+  - platform: template
+    name: GNSS fix
+    lambda: return id(gnss_valid);
+  - platform: template
+    name: Cellular connected
+    device_class: connectivity
+    lambda: return id(cell).is_connected();
+
+button:
+  - platform: restart
+    name: Restart
+  # Answers appear in the device log (set coproc_log_level: DEBUG to see the co-processor's)
+  - platform: template
+    name: "Modem: serving cell (AT+CPSI?)"
+    entity_category: diagnostic
+    on_press:
+      - modem.send_at: "AT+CPSI?"
+  - platform: template
+    name: "Co-proc: identify (ATI)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write: { id: coproc, data: "ATI\r" }
+  - platform: template
+    name: "Co-proc: battery (ATRV)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write: { id: coproc, data: "ATRV\r" }

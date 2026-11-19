@@ -4,14 +4,15 @@
 
 | Path | What |
 | --- | --- |
-| `packages/freematics-oneplus-b.yaml` | The board package device configs pull in; its `esphome: project: version` is the release version |
-| `components/` | ESPHome external components, added one at a time (none yet; see [plan.md](plan.md)) |
-| `examples/car.yaml` | A complete device config; CI validates and compiles it with `examples/secrets.example.yaml` |
+| `packages/freematics-oneplus-b.yaml` | The board package every device config pulls in; its `esphome: project: version` is the release version |
+| `packages/wifi-first.yaml`, `packages/uplink-*.yaml` | Wi-Fi first; one uplink package per configuration ([configurations.md](configurations.md)) |
+| `components/traccar_uplink/` | The Traccar uplink component; `teltonika.h` and `tracker.h` are plain C++ with no ESPHome dependencies, tested on the host |
+| `examples/` | A complete device config per configuration; CI validates and compiles each with `examples/secrets.example.yaml` |
 | `docs/plan.md` | Status, decisions, phases and open questions: keep it current |
 | `docs/hardware.md`, `docs/networking.md` | Hardware facts and sources; Wi-Fi/LTE/WireGuard and data use |
 | `docs/backlog.md`, `docs/audits.md` | Ideas set aside; review records |
 | `scripts/release.py`, `scripts/markdown.py` | CI's changelog, version, test build and release-notes helpers; the Markdown line check |
-| `tests/` | Tests for the scripts and the workflows |
+| `tests/` | Tests for the scripts and workflows, and `test_traccar_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder |
 
 ## Setup and testing
 
@@ -19,12 +20,12 @@
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
 pytest tests/
-ruff check scripts/ tests/ && ruff format --check scripts/ tests/
+ruff check scripts/ tests/ components/ && ruff format --check scripts/ tests/ components/
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
 cp examples/secrets.example.yaml examples/secrets.yaml   # git-ignored
-esphome config examples/car.yaml
-esphome compile examples/car.yaml                         # first run downloads ESP-IDF (~1 GB)
+esphome config examples/car-traccar.yaml
+esphome compile examples/car-traccar.yaml                 # first run downloads ESP-IDF (~1 GB)
 ```
 
 Claude sessions can run everything but the compile (the session proxy blocks dl.espressif.com); CI compiles when it's run. Lambdas are C++, so YAML with lambdas isn't done until a compile passes.
@@ -33,12 +34,7 @@ Testing on hardware: on the bench first (12 V into the OBD plug, a USB cable for
 
 ## Vehicle safety
 
-The stock firmware triggered warnings on both cars, most likely by polling too much or while the car was asleep. Anything that talks to the vehicle bus:
-
-- polls only while the engine is running (battery above about 13.2 V, or RPM above zero);
-- polls one PID at a time, each no faster than every 1 to 5 seconds, and probes supported PIDs once;
-- backs off after errors or `NO DATA`;
-- never sends mode 04 (clear codes) or any write.
+The stock firmware triggered warnings on both cars, most likely through its OBD requests. So for now nothing is sent to the vehicle bus at all: no OBD requests, no protocol set-up, no writes, no clearing codes. Only commands the co-processor answers itself are allowed (`ATI`, `ATRV`, the GNSS commands); [hardware.md](hardware.md) lists them. Reading the bus means listening to what's already on it. Active requests are a later, separate decision, tested on one car at a time.
 
 ## Changelog
 
@@ -87,8 +83,8 @@ No tags are pushed by hand. CI refuses a pull request into `main` whose version 
 `.github/workflows/build.yml` runs **only when started by hand** while the repository is private, to save Actions minutes: from the Actions tab, or `gh api -X POST repos/raetha/esphome-freematics/actions/workflows/build.yml/dispatches -f ref=<branch>`. Run it on a `try/` branch before merging anything with lambdas or C++, and on `dev` to publish a test build. When the repository goes public, the push and pull request triggers come back (they're in a comment at the top of the workflow). Each run:
 
 - `scripts/release.py check`: `CHANGELOG.md` has `[Unreleased]`; into and on `main`, also a dated section for the package's version; released sections match `main`'s.
-- The Markdown line check, ruff, and `pytest tests/`.
-- `esphome config` on every example and `esphome compile examples/car.yaml`, with the ESP-IDF toolchain cached per ESPHome version.
+- The Markdown line check, ruff, and `pytest tests/` (including the host build of the Traccar uplink's encoder and filter).
+- `esphome config` and `esphome compile` on every example, with the ESP-IDF toolchain cached per ESPHome version.
 - `CI passed`: a gate job that passes only when every check above did, the one status check a `main` ruleset would require.
 
 Then, on `main`, the release and sync-dev jobs; on `dev`, the test build. Every checkout uses `persist-credentials: false` except sync-dev's, the one job that pushes. `tests/test_workflows.py` checks permissions on every job, actions pinned to commit SHAs, no `${{ }}` inside `run:` scripts, credentials dropped, and `CI passed` depending on every check job.

@@ -1,0 +1,44 @@
+# Wi-Fi first: while a known Wi-Fi network is connected, LTE is switched off;
+# when Wi-Fi drops, LTE comes back. Like the telelogger, which joins Wi-Fi when
+# it finds it and shuts the cellular connection down.
+#
+# Needs the board package and a wifi: block with networks in the device config.
+
+substitutions:
+  lte_back_after: 30s     # Wi-Fi gone this long: turn LTE back on
+
+wifi:
+  reboot_timeout: 0s      # never reboot because the car is away from home
+  on_connect:
+    - logger.log: "Wi-Fi up: turning LTE off"
+    - if:
+        condition:
+          not:
+            script.is_running: modem_power_on
+        then:
+          - modem.disable:
+  on_disconnect:
+    - delay: ${lte_back_after}
+    - if:
+        condition:
+          not:
+            wifi.connected:
+        then:
+          - logger.log: "Wi-Fi gone: turning LTE on"
+          - modem.enable:
+
+esphome:
+  on_boot:
+    # The board package's power-on leaves LTE on; once it's done, turn LTE off
+    # again if Wi-Fi is already up.
+    - priority: -300
+      then:
+        - wait_until:
+            condition:
+              not:
+                script.is_running: modem_power_on
+        - if:
+            condition:
+              wifi.connected:
+            then:
+              - modem.disable:
