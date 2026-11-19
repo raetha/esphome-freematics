@@ -37,7 +37,7 @@ From `FreematicsPlus.cpp` and `FreematicsOBD.cpp`. Each ends in `\r`.
 
 ## Cellular modules
 
-Freematics sells SIM7600E-H, SIM7600A-H and SIM7070G modules for the xBee socket. ESPHome's `modem` supports `SIM7600` and `SIM7070` (network type sensing only on SIM7600/SIM7670). Which module is in each dongle: open question in [plan.md](plan.md).
+Freematics sells SIM7600E-H, SIM7600A-H and SIM7070G modules for the xBee socket. ESPHome's `modem` supports `SIM7600` and `SIM7070` (network type sensing only on SIM7600/SIM7670). The owner's dongles have the **SIM7070G** (LTE Cat-M1/NB-IoT with 2G fallback), on Hologram (APN `hologram`). ESPHome has no network type sensor for it.
 
 ## Observed on hardware
 

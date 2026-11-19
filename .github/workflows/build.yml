@@ -11,10 +11,12 @@ name: Build
 # as a GitHub pre-release tagged `<version>-dev.<n>`, which a device config can pin as its
 # package `ref`; older test builds are deleted.
 
+# Manual only for now, to save Actions minutes while the repository is private:
+# run it from the Actions tab (or `gh api -X POST .../actions/workflows/build.yml/dispatches`)
+# on a branch when a change needs compiling. When the repository goes public, restore:
+#   push: { branches: [main, dev] }
+#   pull_request:
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
   workflow_dispatch:
 
 permissions:

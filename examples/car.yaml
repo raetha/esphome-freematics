@@ -13,8 +13,8 @@
 substitutions:
   name: freematics-car1
   friendly_name: Car 1
-  cell_apn: your.apn
-  modem_model: SIM7600
+  cell_apn: hologram
+  modem_model: SIM7070
 
 packages:
   board: !include ../packages/freematics-oneplus-b.yaml
@@ -29,17 +29,18 @@ wifi:
       password: !secret wifi_second_password
   reboot_timeout: 0s   # never reboot because the car is away from home
 
-# Native API and OTA work while on a Wi-Fi network Home Assistant can reach.
+# The package sets up the native API to dial Home Assistant itself; the key
+# is per device. Add the device to HA once while it's on home Wi-Fi.
 api:
-  reboot_timeout: 0s
   encryption:
     key: !secret api_encryption_key
 
+# Install updates while the car is on Wi-Fi: a firmware is about 1 MB of LTE data.
 ota:
   - platform: esphome
     password: !secret ota_password
 
-# Tunnel home so MQTT stays private. Only the broker's address goes through
+# Tunnel home so Home Assistant stays private. Only HA's address goes through
 # it (peer_allowed_ips); everything else, including SNTP, goes direct.
 # docs/networking.md has the server side and the data-use estimate.
 wireguard:
@@ -49,10 +50,5 @@ wireguard:
   peer_public_key: !secret wg_peer_public_key
   peer_preshared_key: !secret wg_preshared_key
   peer_allowed_ips:
-    - !secret wg_allowed_ip
-  peer_persistent_keepalive: 0s   # MQTT's 60 s keepalive already holds the NAT mapping
-
-mqtt:
-  broker: !secret mqtt_broker     # the broker's address as seen through the tunnel
-  username: !secret mqtt_username
-  password: !secret mqtt_password
+    - !secret wg_allowed_ip       # Home Assistant's address, e.g. 192.168.1.10/32
+  peer_persistent_keepalive: 25s  # sent only when nothing else was; keeps the carrier's NAT open
