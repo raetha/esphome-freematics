@@ -1,18 +1,18 @@
 # Freematics ONE+ Model B board package for ESPHome 2026.11+
 #
-# Pulls in everything that is the same on every dongle: pins, the cellular
-# modem, the co-processor link (internal GNSS, later OBD), diagnostics, and the
-# native API set up to dial Home Assistant itself. A device config adds what is
-# its own: name, APN, Wi-Fi networks, API key, WireGuard keys.
-# See examples/car.yaml, docs/hardware.md (pins and sources) and
-# docs/networking.md (data use: every entity here costs cellular data).
+# What every dongle has, whatever it reports to: pins, the cellular modem and
+# its power key, the co-processor link with the internal GNSS, battery voltage.
+# Each GNSS fix lands in the gnss_* globals and runs the on_gnss_fix script,
+# which an uplink package defines (packages/uplink-*.yaml). See the examples/
+# configs, docs/hardware.md (pins and sources) and docs/configurations.md.
 #
 # Substitutions a device config must set: name, friendly_name, cell_apn.
 
 substitutions:
-  modem_model: SIM7070     # SIM7070G in the owner's dongles; SIM7600 also works
-  api_batch_delay: 2s      # state updates within this window share one packet
-  gnss_poll_interval: 5s
+  modem_model: SIM7070          # SIM7070G in the owner's dongles; SIM7600 also works
+  modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
+  gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
+  coproc_log_level: INFO        # DEBUG logs every co-processor exchange
 
 esphome:
   name: ${name}
@@ -42,17 +42,12 @@ esp32:
 logger:
   level: DEBUG
   baud_rate: 115200
+  logs:
+    uart_debug: ${coproc_log_level}
 
-# ---------- Home Assistant: native API, dialled from the device ----------
-# outgoing_connection: the device connects to Home Assistant itself (HA 2026.10+,
-# encryption required), so HA never has to reach the dongle behind the carrier's
-# NAT. Add the device to HA once while it's on home Wi-Fi; it remembers HA's
-# address and dials it, over WireGuard, from LTE. The device config sets the key.
-api:
-  batch_delay: ${api_batch_delay}
-  reboot_timeout: 0s       # never reboot just because HA isn't connected
-  outgoing_connection:
-    delay: 60s
+time:
+  - platform: sntp
+    id: sntp_time
 
 # ---------- Cellular (xBee socket) ----------
 modem:
@@ -65,7 +60,7 @@ modem:
     ignore_strapping_warning: true   # Freematics wiring; only matters at boot
   baud_rate: 115200
   enable_on_boot: false               # powered on by modem_power_on
-  reboot_timeout: 15min
+  reboot_timeout: ${modem_reboot_timeout}
   update_interval: 120s
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
@@ -74,15 +69,20 @@ modem:
   on_disconnect:
     - logger.log: "Cellular: PPP down"
 
-globals:
-  - id: modem_synced
-    type: bool
-    initial_value: "false"
+output:
+  - platform: gpio
+    id: modem_pwrkey
+    pin: GPIO27
+  - platform: gpio
+    id: coproc_nreset
+    pin:
+      number: GPIO15
+      ignore_strapping_warning: true
 
 script:
-  # Press PWRKEY for 200 ms, as the Freematics library does, and let ESPHome
-  # bring up PPP. The library repeats the press until the module answers, so
-  # this does too (a short press doesn't power off a module that's already on).
+  # Press PWRKEY for 200 ms, as the Freematics library does, until the module
+  # answers (a short press doesn't power off a module that's already on).
+  # packages/wifi-first.yaml turns LTE off again if Wi-Fi is already up.
   - id: modem_power_on
     then:
       - modem.enable:
@@ -99,64 +99,44 @@ script:
                   - output.turn_off: modem_pwrkey
                   - delay: 10s
 
-output:
-  - platform: gpio
-    id: modem_pwrkey
-    pin: GPIO27
-  - platform: gpio
-    id: coproc_nreset
-    pin:
-      number: GPIO15
-      ignore_strapping_warning: true
-
-time:
-  - platform: sntp
-    id: sntp_time
-
-# ---------- Diagnostics ----------
-# Each sends only on a real change, and at most every 15 minutes otherwise.
-debug:
-  update_interval: 300s
+globals:
+  - id: modem_synced
+    type: bool
+    initial_value: "false"
+  # The latest GNSS fix, filled from ATGPS replies (see uart below)
+  - id: gnss_valid
+    type: bool
+    initial_value: "false"
+  - id: gnss_date        # ddmmyy, UTC
+    type: uint32_t
+    initial_value: "0"
+  - id: gnss_time        # hhmmsscc, UTC
+    type: uint32_t
+    initial_value: "0"
+  - id: gnss_lat
+    type: float
+    initial_value: "0"
+  - id: gnss_lon
+    type: float
+    initial_value: "0"
+  - id: gnss_kmh
+    type: float
+    initial_value: "0"
+  - id: gnss_course
+    type: float
+    initial_value: "0"
+  - id: gnss_sats
+    type: uint8_t
+    initial_value: "0"
+  - id: gnss_hdop
+    type: uint8_t
+    initial_value: "0"
 
 sensor:
-  - platform: modem
-    rssi:
-      name: Cellular RSSI
-      filters:
-        - or:
-            - throttle: 15min
-            - delta: 4
-    ber:
-      name: Cellular bit error rate
-      filters:
-        - or:
-            - throttle: 15min
-            - delta: 2
-  - platform: uptime
-    name: Uptime
-    update_interval: 15min
-  - platform: debug
-    free:
-      name: Free heap
-      filters:
-        - or:
-            - throttle: 15min
-            - delta: 8000
-    block:
-      name: Largest free block
-      filters:
-        - or:
-            - throttle: 15min
-            - delta: 8000
-    loop_time:
-      name: Loop time
-      filters:
-        - or:
-            - throttle: 15min
-            - delta: 20
   - platform: adc
+    id: battery_voltage
     pin: GPIO36
-    name: Battery voltage (ADC)
+    internal: true                   # uplink packages expose it where it's wanted
     attenuation: 12db
     update_interval: 30s
     accuracy_decimals: 2
@@ -164,58 +144,11 @@ sensor:
     device_class: voltage
     filters:
       - multiply: 11.0   # 100k/10k divider; calibrate against a meter
-      - or:
-          - throttle: 15min
-          - delta: 0.2
-  # Internal GNSS, read through the co-processor (filled by the uart lambda below).
-  # Position goes out only when it moves about 10 m or more.
-  - platform: template
-    id: gnss_lat
-    name: GNSS latitude
-    accuracy_decimals: 6
-    filters:
-      - delta: 0.0001
-  - platform: template
-    id: gnss_lon
-    name: GNSS longitude
-    accuracy_decimals: 6
-    filters:
-      - delta: 0.0001
-  - platform: template
-    id: gnss_speed
-    name: GNSS speed
-    unit_of_measurement: km/h
-    accuracy_decimals: 0
-    filters:
-      - delta: 5
-  - platform: template
-    id: gnss_sats
-    name: GNSS satellites
-    filters:
-      - delta: 2
-  - platform: template
-    id: gnss_hdop
-    name: GNSS HDOP (raw)
-    filters:
-      - delta: 5
-
-text_sensor:
-  - platform: debug
-    reset_reason:
-      name: Reset reason
-
-binary_sensor:
-  - platform: template
-    id: gnss_fix
-    name: GNSS fix
-  - platform: template
-    name: Cellular connected
-    device_class: connectivity
-    lambda: return id(cell).is_connected();
 
 # ---------- Co-processor link (STM32F103: OBD and the internal GNSS) ----------
-# Stopgap until the freematics_link component: replies are logged, and ATGPS
-# replies are parsed into the GNSS entities.
+# Only reads: ATGPS for the GNSS and, from buttons, ATI and ATRV, which the
+# co-processor answers itself. Nothing here sends to the vehicle bus.
+# Stopgap until the freematics_link component.
 uart:
   - id: coproc
     rx_pin: GPIO13
@@ -232,9 +165,9 @@ uart:
             UARTDebug::log_string(direction, bytes);
             if (direction != uart::UART_DIRECTION_RX) return;
             // Reply to ATGPS, per FreematicsPlus.cpp gpsGetData():
-            // $GNIFO,date,time,lat*1e6,lng*1e6,alt*100,speed(knots)*100,heading*100,sats,hdop
+            // GNIFO,date,time,lat*1e6,lng*1e6,alt*100,speed(knots)*100,heading*100,sats,hdop
             std::string s(bytes.begin(), bytes.end());
-            auto p = s.find("$GNIFO,");
+            auto p = s.find("\x24GNIFO,");  // the dollar sign spelled out: ESPHome reads it as a substitution
             if (p == std::string::npos) return;
             long v[9] = {0};
             int n = 0;
@@ -246,58 +179,21 @@ uart:
               c = q + 1;
             }
             if (n < 4 || (v[2] == 0 && v[3] == 0)) {
-              id(gnss_fix).publish_state(false);
+              id(gnss_valid) = false;
               return;
             }
-            id(gnss_fix).publish_state(true);
-            id(gnss_lat).publish_state(v[2] / 1e6f);
-            id(gnss_lon).publish_state(v[3] / 1e6f);
-            if (n > 5) id(gnss_speed).publish_state(v[5] / 100.0f * 1.852f);
-            if (n > 7) id(gnss_sats).publish_state(v[7]);
-            if (n > 8) id(gnss_hdop).publish_state(v[8]);
+            id(gnss_valid) = true;
+            id(gnss_date) = v[0];
+            id(gnss_time) = v[1];
+            id(gnss_lat) = v[2] / 1e6f;
+            id(gnss_lon) = v[3] / 1e6f;
+            id(gnss_kmh) = n > 5 ? v[5] / 100.0f * 1.852f : 0;
+            id(gnss_course) = n > 6 ? v[6] / 100.0f : 0;
+            id(gnss_sats) = n > 7 ? v[7] : 0;
+            id(gnss_hdop) = n > 8 ? v[8] : 0;
+            id(on_gnss_fix).execute();
 
 interval:
   - interval: ${gnss_poll_interval}
     then:
-      - if:
-          condition:
-            switch.is_on: gnss_polling
-          then:
-            - uart.write: { id: coproc, data: "ATGPS\r" }
-
-switch:
-  - platform: template
-    id: gnss_polling
-    name: GNSS polling
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_ON
-
-button:
-  - platform: restart
-    name: Restart
-  # Answers appear in the device log (ESPHome's log viewer, or USB serial)
-  - platform: template
-    name: "Modem: serving cell (AT+CPSI?)"
-    entity_category: diagnostic
-    on_press:
-      - modem.send_at: "AT+CPSI?"
-  - platform: template
-    name: "Modem: module info (ATI)"
-    entity_category: diagnostic
-    on_press:
-      - modem.send_at: "ATI"
-  - platform: template
-    name: "Co-proc: identify (ATI)"
-    entity_category: diagnostic
-    on_press:
-      - uart.write: { id: coproc, data: "ATI\r" }
-  - platform: template
-    name: "Co-proc: battery (ATRV)"
-    entity_category: diagnostic
-    on_press:
-      - uart.write: { id: coproc, data: "ATRV\r" }
-  - platform: template
-    name: "Co-proc: raw NMEA (ATGRR)"
-    entity_category: diagnostic
-    on_press:
-      - uart.write: { id: coproc, data: "ATGRR\r" }
+      - uart.write: { id: coproc, data: "ATGPS\r" }

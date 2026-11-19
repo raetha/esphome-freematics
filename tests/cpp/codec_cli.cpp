@@ -1,0 +1,83 @@
+// Host harness for components/traccar_uplink: encodes packets and runs the
+// tracker from commands on stdin, printing results for tests/test_traccar_uplink.py.
+//
+//   packet <packet_id> <location_packet_id> <device_id> <n> then n lines:
+//     <time> <has_location> <lat> <lon> <speed> <course> <sats> <battery_mv> <motion>
+//   -> hex of the packet
+//   ack <hex> <location_packet_id>  -> accepted count or -1
+//   unix <ddmmyy> <hhmmsscc>        -> Unix seconds
+//   track <moving_speed> <stop_delay> <moving_interval> <turn_angle> <min_turn> <heartbeat> <n>
+//     then n lines: fix <time> <speed> <course> | tick <time>
+//   -> one decision per line: NONE RECORD START STOP HEARTBEAT
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <vector>
+#include "teltonika.h"
+#include "tracker.h"
+
+using namespace traccar_uplink;
+
+int main() {
+  char cmd[32];
+  while (std::scanf("%31s", cmd) == 1) {
+    if (!std::strcmp(cmd, "packet")) {
+      unsigned pid, lpid, n;
+      char id[80];
+      std::scanf("%u %u %79s %u", &pid, &lpid, id, &n);
+      std::vector<Record> rs(n);
+      for (auto &r : rs) {
+        unsigned t, has, sats, mv;
+        int motion;
+        std::scanf("%u %u %f %f %f %f %u %u %d", &t, &has, &r.latitude, &r.longitude, &r.speed_kmh, &r.course_deg,
+                   &sats, &mv, &motion);
+        r.time = t;
+        r.has_location = has;
+        r.satellites = sats;
+        r.battery_mv = mv;
+        r.motion = motion;
+      }
+      uint8_t buf[2048];
+      size_t len = encode_packet(buf, sizeof(buf), pid, lpid, id, rs.data(), rs.size());
+      for (size_t i = 0; i < len; i++) std::printf("%02x", buf[i]);
+      std::printf("\n");
+    } else if (!std::strcmp(cmd, "ack")) {
+      char hex[64];
+      unsigned lpid;
+      std::scanf("%63s %u", hex, &lpid);
+      uint8_t b[32];
+      size_t n = std::strlen(hex) / 2;
+      for (size_t i = 0; i < n; i++) std::sscanf(hex + 2 * i, "%2hhx", &b[i]);
+      std::printf("%d\n", parse_ack(b, n, lpid));
+    } else if (!std::strcmp(cmd, "unix")) {
+      unsigned d, t;
+      std::scanf("%u %u", &d, &t);
+      std::printf("%u\n", gnss_to_unix(d, t));
+    } else if (!std::strcmp(cmd, "track")) {
+      TrackerConfig c;
+      unsigned stop, interval, min_turn, hb, n;
+      std::scanf("%f %u %u %f %u %u %u", &c.moving_speed_kmh, &stop, &interval, &c.turn_angle_deg, &min_turn, &hb, &n);
+      c.stop_delay_s = stop;
+      c.moving_interval_s = interval;
+      c.min_turn_interval_s = min_turn;
+      c.heartbeat_s = hb;
+      Tracker tr(c);
+      static const char *names[] = {"NONE", "RECORD", "START", "STOP", "HEARTBEAT"};
+      for (unsigned i = 0; i < n; i++) {
+        char kind[8];
+        unsigned t;
+        std::scanf("%7s %u", kind, &t);
+        Decision d;
+        if (!std::strcmp(kind, "fix")) {
+          float speed, course;
+          std::scanf("%f %f", &speed, &course);
+          d = tr.on_fix(t, speed, course);
+        } else {
+          d = tr.on_tick(t);
+        }
+        std::printf("%s\n", names[static_cast<int>(d)]);
+      }
+    }
+  }
+  return 0;
+}

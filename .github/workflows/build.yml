@@ -2,8 +2,8 @@ name: Build
 
 # Branches (docs/development.md -> "Branches and releases"): work lands on `dev`, and each
 # release is one squash-merged pull request from `dev` into `main`.
-# Every push and pull request: changelog and Markdown checks, ruff, the script and workflow
-# tests, and `esphome config` + `esphome compile` of the example device config.
+# Each run: changelog and Markdown checks, ruff, the tests (including a host build of the Traccar
+# uplink's encoder and filter), and `esphome config` + `esphome compile` of every example.
 # Push to main: if the board package's version has no tag yet (and there's no DRAFT file), tag
 # it and publish the GitHub release with the changelog section as notes, delete the test
 # builds, then reset `dev` to `main` when everything on it was released.
@@ -70,10 +70,10 @@ jobs:
         run: pip install "$(grep -E '^ruff==' requirements-dev.txt)"
 
       - name: ruff check
-        run: ruff check scripts/ tests/
+        run: ruff check scripts/ tests/ components/
 
       - name: ruff format check
-        run: ruff format --check scripts/ tests/
+        run: ruff format --check scripts/ tests/ components/
 
   tests:
     name: Script and workflow tests
@@ -128,16 +128,14 @@ jobs:
       - name: Placeholder secrets
         run: cp examples/secrets.example.yaml examples/secrets.yaml
 
-      - name: esphome config
+      - name: esphome config and compile every example
         run: |
           for f in examples/*.yaml; do
             case "$f" in */secrets*) continue ;; esac
             esphome config "$f" > /dev/null
             echo "$f: valid"
+            esphome compile "$f"
           done
-
-      - name: esphome compile
-        run: esphome compile examples/car.yaml
 
   release:
     needs: [lint, tests, esphome]

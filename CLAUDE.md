@@ -1,6 +1,6 @@
 # Notes for Claude sessions
 
-ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogger firmware in the owner's two cars (a Volvo and a Subaru), with Home Assistant as the backend: for now the native API, dialled from the device through a WireGuard tunnel. **Cellular data must be kept to the bare minimum**: weigh every entity, update and protocol by its bytes on LTE (`docs/networking.md`). The canonical guide is `docs/development.md`. Where the project stands and what comes next is `docs/plan.md`, which is the first thing to read and the thing to keep current. Hardware facts (pins, co-processor commands, sources) are in `docs/hardware.md`; networking (Wi-Fi/LTE, WireGuard, data use) in `docs/networking.md`; the HA side in `docs/home-assistant.md`; ideas set aside in `docs/backlog.md`. This file is the short version.
+ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogger firmware in the owner's two cars (a Volvo and a Subaru), reporting to the owner's Traccar server over a compact UDP protocol; a Home Assistant configuration exists as an alternative, and the repo keeps an example of each with its pros and cons (`docs/configurations.md`). **Cellular data must be kept to the bare minimum** (pay-as-you-go SIM; the stock firmware's 10 to 15 KB a day is the benchmark): weigh every record, update and protocol by its bytes on LTE. **Never send anything to the vehicle bus**: passive reading only, until the owner decides otherwise. The canonical guide is `docs/development.md`. Where the project stands and what comes next is `docs/plan.md`, which is the first thing to read and the thing to keep current. Hardware facts (pins, co-processor commands, sources) are in `docs/hardware.md`; the configurations compared in `docs/configurations.md`; networking (Wi-Fi first, WireGuard, data use) in `docs/networking.md`; the HA side in `docs/home-assistant.md`; ideas set aside in `docs/backlog.md`. This file is the short version.
 
 ## How we work
 
@@ -14,18 +14,21 @@ ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogge
 
 ## Validate
 
-- `pip install -r requirements-dev.txt`, then `pytest tests/`, `ruff check scripts/ tests/`, `ruff format --check scripts/ tests/`, `python3 scripts/markdown.py --check $(git ls-files '*.md')` and `python3 scripts/release.py check`.
-- `cp examples/secrets.example.yaml examples/secrets.yaml && esphome config examples/car.yaml`. Sessions can't compile: the ESP-IDF install needs dl.espressif.com, which the session proxy blocks. CI compiles when it's run (by hand, for now).
+- `pip install -r requirements-dev.txt`, then `pytest tests/` (builds the component's plain C++ parts with g++), `ruff check scripts/ tests/ components/`, `ruff format --check scripts/ tests/ components/`, `python3 scripts/markdown.py --check $(git ls-files '*.md')` and `python3 scripts/release.py check`.
+- `cp examples/secrets.example.yaml examples/secrets.yaml`, then `esphome config` on each of `examples/*.yaml` except the secrets. Sessions can't compile: the ESP-IDF install needs dl.espressif.com, which the session proxy blocks. CI compiles when it's run (by hand, for now).
 - Lambdas only prove themselves at compile time: push to a `try/` branch and run CI on it before calling YAML with lambdas done.
 
 ## Hard-won facts (details in docs/hardware.md and docs/networking.md)
 
 - The internal GNSS is wired to the STM32 co-processor, not the ESP32: stock `gps:` can't read it. `ATGPSON`, then `ATGPS` answers `$GNIFO,date,time,lat×1e6,lng×1e6,alt×100,knots×100,heading×100,sats,hdop`.
-- All vehicle access (CAN, K-line) is behind the co-processor too, on the UART at GPIO13 (RX) / GPIO14 (TX), 115200 baud, reset on GPIO15. OBD polling must stay conservative (engine running only, slow, one PID at a time, never mode 04 or writes): the stock firmware triggered dash alerts on both cars.
+- All vehicle access (CAN, K-line) is behind the co-processor too, on the UART at GPIO13 (RX) / GPIO14 (TX), 115200 baud, reset on GPIO15. Only commands the co-processor answers itself (`ATI`, `ATRV`, GNSS) are allowed; no OBD requests or writes (the stock firmware's requests likely caused dash alerts on both cars).
 - Cellular: SIM7070G on Hologram (APN `hologram`). RX GPIO35, TX GPIO2, PWRKEY GPIO27 (200 ms high pulse, repeated until the module answers, as the Freematics library does), no RTS/CTS. ESPHome's `modem` doesn't drive PWRKEY, and has no network type sensor for the SIM7070.
 - GPIO12 is the flash-voltage strapping pin: never drive it unless an external GNSS is fitted.
-- `wifi:` and `modem:` validate together. `network: priority` can't include the modem yet, but ESP-IDF's route priorities (Wi-Fi STA 100, PPP 20) put Wi-Fi first when both are up.
-- The native API's `outgoing_connection` (HA 2026.10+) lets the device dial HA, so HA never needs to reach it behind carrier NAT. ESPHome has no device tracker entity: HA uses a template device tracker over the latitude/longitude sensors.
+- Traccar: Teltonika GH3000 (codec 7) over UDP on port 5027 is the densest format Traccar decodes (17 bytes a fix) and Traccar acknowledges each packet with `00 05 00 00 01 <location packet id> <count>`; the Freematics protocol (5170) is text and unacknowledged. Logic that can be tested on the host lives in plain headers (`teltonika.h`, `tracker.h`) with tests against a mirror of Traccar's decoder.
+- A `$` inside a lambda in a package is read as a substitution: spell it `\x24` in strings and keep it out of comments.
+- `packages/wifi-first.yaml` switches LTE off while a known Wi-Fi network is connected, as the telelogger did.
+- `wifi:` and `modem:` validate together. `network: priority` can't include the modem yet; ESP-IDF's route priorities (Wi-Fi STA 100, PPP 20) favour Wi-Fi in the moment both are up.
+- Home Assistant configuration: the native API's `outgoing_connection` (HA 2026.10+) lets the device dial HA, so HA never needs to reach it behind carrier NAT. ESPHome has no device tracker entity: HA uses a template device tracker over the latitude/longitude sensors. It costs about 40 times the Traccar configuration's data.
 - Home Assistant can't take entity states with past timestamps: replayed sensor values become hourly long-term statistics; replayed location points have no supported path (`docs/plan.md` → open questions).
 - The repo is private on the free plan: no rulesets or branch protection, so the branch rules are kept by convention. Checkouts with `persist-credentials: false` can't `git fetch` a private repo: CI reads other branches' files through `gh api .../contents/...` with the job token instead.
 - Sessions can't read Actions settings, secrets or security alerts through the proxy: ask the owner. The proxy has no GraphQL (`gh pr create` fails; use `gh api` REST calls).
