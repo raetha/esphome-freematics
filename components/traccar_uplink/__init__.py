@@ -77,6 +77,7 @@ CONFIG_SCHEMA = cv.All(
 
 
 async def to_code(config):
+    socket.require_ipv4_resolve()  # compiles the async DNS lookup we use
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     cg.add(var.set_host(config[CONF_HOST]))
