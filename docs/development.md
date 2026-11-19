@@ -27,7 +27,7 @@ esphome config examples/car.yaml
 esphome compile examples/car.yaml                         # first run downloads ESP-IDF (~1 GB)
 ```
 
-Claude sessions can run everything but the compile (the session proxy blocks dl.espressif.com); CI compiles every push and pull request. Lambdas are C++, so YAML with lambdas isn't done until a compile passes.
+Claude sessions can run everything but the compile (the session proxy blocks dl.espressif.com); CI compiles when it's run. Lambdas are C++, so YAML with lambdas isn't done until a compile passes.
 
 Testing on hardware: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
 
@@ -62,7 +62,7 @@ Semantic versioning. Before 1.0.0, a change that makes existing device configs n
 | Branch | What goes there | What a push does |
 | --- | --- | --- |
 | `main` | Releases only: one squash-merged pull request per release. Never pushed to directly. | Releases the version if it has no tag yet (and there's no `DRAFT`); deletes test builds; resets `dev` (sync-dev). |
-| `dev` | Adopted work, and Dependabot's updates. `[Unreleased]` is kept current here. | Publishes a test build when `packages/` or `components/` changed. |
+| `dev` | Adopted work, and Dependabot's updates. `[Unreleased]` is kept current here. | Publishes a test build when `packages/` or `components/` changed (while CI is manual: when CI is run on `dev`). |
 | `try/<topic>` | Experiments that may be dropped. Branched from `dev`. | Nothing by itself: open a (draft) pull request into `dev` to run CI. |
 
 Adopted `try/` work is squash-merged into `dev`; ideas dropped for good get a line in [backlog.md](backlog.md).
@@ -84,20 +84,20 @@ No tags are pushed by hand. CI refuses a pull request into `main` whose version 
 
 ### What CI does
 
-`.github/workflows/build.yml`, on every push and pull request:
+`.github/workflows/build.yml` runs **only when started by hand** while the repository is private, to save Actions minutes: from the Actions tab, or `gh api -X POST repos/raetha/esphome-freematics/actions/workflows/build.yml/dispatches -f ref=<branch>`. Run it on a `try/` branch before merging anything with lambdas or C++, and on `dev` to publish a test build. When the repository goes public, the push and pull request triggers come back (they're in a comment at the top of the workflow). Each run:
 
 - `scripts/release.py check`: `CHANGELOG.md` has `[Unreleased]`; into and on `main`, also a dated section for the package's version; released sections match `main`'s.
 - The Markdown line check, ruff, and `pytest tests/`.
 - `esphome config` on every example and `esphome compile examples/car.yaml`, with the ESP-IDF toolchain cached per ESPHome version.
 - `CI passed`: a gate job that passes only when every check above did, the one status check a `main` ruleset would require.
 
-Then, on a push to `main`, the release and sync-dev jobs; on a push to `dev`, the test build. Every checkout uses `persist-credentials: false` except sync-dev's, the one job that pushes. `tests/test_workflows.py` checks permissions on every job, actions pinned to commit SHAs, no `${{ }}` inside `run:` scripts, credentials dropped, and `CI passed` depending on every check job.
+Then, on `main`, the release and sync-dev jobs; on `dev`, the test build. Every checkout uses `persist-credentials: false` except sync-dev's, the one job that pushes. `tests/test_workflows.py` checks permissions on every job, actions pinned to commit SHAs, no `${{ }}` inside `run:` scripts, credentials dropped, and `CI passed` depending on every check job.
 
-The compile takes several minutes. The repository is private on the free plan, which includes 2,000 Actions minutes a month; watch the usage if pushes get frequent.
+The compile takes several minutes, and the free plan's private repositories get 2,000 Actions minutes a month.
 
 ### Test builds
 
-A push to `dev` that changes `packages/` or `components/` publishes a GitHub pre-release tagged `<expected next version>-dev.<n>` (right after a release, `<next patch>-dev.<n>`), with the `[Unreleased]` section as notes and no assets: a device config pins it as its package `ref`. `<n>` counts test builds of that version. Older test builds are deleted. To publish one anyway, run the Build workflow by hand on `dev`.
+A run on `dev` (by hand, for now) that finds changes in `packages/` or `components/` since the last test build publishes a GitHub pre-release tagged `<expected next version>-dev.<n>` (right after a release, `<next patch>-dev.<n>`), with the `[Unreleased]` section as notes and no assets: a device config pins it as its package `ref`. `<n>` counts test builds of that version. Older test builds are deleted. To publish one anyway, run the Build workflow by hand on `dev`.
 
 ### Repository settings
 
