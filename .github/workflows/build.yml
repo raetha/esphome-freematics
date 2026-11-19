@@ -3,7 +3,8 @@ name: Build
 # Branches (docs/development.md -> "Branches and releases"): work lands on `dev`, and each
 # release is one squash-merged pull request from `dev` into `main`.
 # Each run: changelog and Markdown checks, ruff, the tests (including a host build of the Traccar
-# uplink's encoder and filter), and `esphome config` + `esphome compile` of every example.
+# uplink's encoder and filter), and `esphome config` + `esphome compile` of every example,
+# built from this checkout (scripts/localize.py).
 # Push to main: if the board package's version has no tag yet (and there's no DRAFT file), tag
 # it and publish the GitHub release with the changelog section as notes, delete the test
 # builds, then reset `dev` to `main` when everything on it was released.
@@ -11,12 +12,10 @@ name: Build
 # as a GitHub pre-release tagged `<version>-dev.<n>`, which a device config can pin as its
 # package `ref`; older test builds are deleted.
 
-# Manual only for now, to save Actions minutes while the repository is private:
-# run it from the Actions tab (or `gh api -X POST .../actions/workflows/build.yml/dispatches`)
-# on a branch when a change needs compiling. When the repository goes public, restore:
-#   push: { branches: [main, dev] }
-#   pull_request:
 on:
+  push:
+    branches: [main, dev]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -120,17 +119,24 @@ jobs:
         with:
           path: |
             ~/.cache/esphome
-            examples/.esphome
+            build/local/.esphome
           key: esphome-${{ hashFiles('requirements-dev.txt') }}-${{ hashFiles('packages/**', 'components/**', 'examples/*.yaml') }}
           restore-keys: |
             esphome-${{ hashFiles('requirements-dev.txt') }}-
 
-      - name: Placeholder secrets
-        run: cp examples/secrets.example.yaml examples/secrets.yaml
+      # The examples fetch packages and components from GitHub (so users can paste them);
+      # scripts/localize.py points them at this checkout, so CI builds what's being changed.
+      - name: Point the examples at this checkout
+        run: |
+          for f in examples/*.yaml; do
+            case "$f" in */secrets*) continue ;; esac
+            python3 scripts/localize.py "$f" build/local
+          done
+          cp examples/secrets.example.yaml build/local/secrets.yaml
 
       - name: esphome config and compile every example
         run: |
-          for f in examples/*.yaml; do
+          for f in build/local/*.yaml; do
             case "$f" in */secrets*) continue ;; esac
             esphome config "$f" > /dev/null
             echo "$f: valid"
