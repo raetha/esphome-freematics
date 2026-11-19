@@ -1,0 +1,58 @@
+# One car's dongle. Copy this file into your ESPHome config folder, rename it,
+# and set the substitutions and secrets. CI validates and compiles it with
+# examples/secrets.example.yaml.
+#
+# The package can come from this repository instead of a local copy, which is
+# how test builds are tried (see README "Test builds"):
+#   packages:
+#     board:
+#       url: https://github.com/raetha/esphome-freematics
+#       ref: dev            # or a test build tag such as 0.1.0-dev.3
+#       files: [packages/freematics-oneplus-b.yaml]
+
+substitutions:
+  name: freematics-car1
+  friendly_name: Car 1
+  cell_apn: your.apn
+  modem_model: SIM7600
+
+packages:
+  board: !include ../packages/freematics-oneplus-b.yaml
+
+# Home Wi-Fi first: while it's connected ESP-IDF routes through it (route
+# priority Wi-Fi 100 over PPP 20); otherwise traffic goes over LTE.
+wifi:
+  networks:
+    - ssid: !secret wifi_home_ssid
+      password: !secret wifi_home_password
+    - ssid: !secret wifi_second_ssid
+      password: !secret wifi_second_password
+  reboot_timeout: 0s   # never reboot because the car is away from home
+
+# Native API and OTA work while on a Wi-Fi network Home Assistant can reach.
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# Tunnel home so MQTT stays private. Only the broker's address goes through
+# it (peer_allowed_ips); everything else, including SNTP, goes direct.
+# docs/networking.md has the server side and the data-use estimate.
+wireguard:
+  address: !secret wg_address
+  private_key: !secret wg_private_key
+  peer_endpoint: !secret wg_endpoint
+  peer_public_key: !secret wg_peer_public_key
+  peer_preshared_key: !secret wg_preshared_key
+  peer_allowed_ips:
+    - !secret wg_allowed_ip
+  peer_persistent_keepalive: 0s   # MQTT's 60 s keepalive already holds the NAT mapping
+
+mqtt:
+  broker: !secret mqtt_broker     # the broker's address as seen through the tunnel
+  username: !secret mqtt_username
+  password: !secret mqtt_password
