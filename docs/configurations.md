@@ -35,6 +35,16 @@ Why Teltonika's GH3000 format: it's the densest location record Traccar decodes 
 
 All of these are substitutions in `packages/uplink-traccar.yaml`; a device config overrides any of them.
 
+### Traccar server settings
+
+- **Teltonika protocol on port 5027 with UDP**: in Traccar's protocol settings, transport UDP or All. Behind Docker or a firewall, publish `5027/udp` explicitly (a plain `-p 5027:5027` is TCP only).
+- **The device**: keep its existing identifier; `traccar_device_id` sends it with every packet. Nothing else to set on the device.
+- **`status.timeout`** (default 600 s): longer than the parked heartbeat, or a parked car flips to "unknown" between heartbeats. With the 15 minute heartbeat, 1200 or more.
+- **Leave `filter.outdated` off** (its default): parked heartbeats without a fix carry no position and would be dropped.
+- **`filter.duplicate`** only catches a repeat of the latest position, so it doesn't help with the rare batch Traccar stores twice (when its acknowledgement is lost). Leave it as you have it.
+- **Trips**: the defaults suit this (motion from speed; a trip ends after `report.trip.minimalParkingDuration`, 300 s, parked).
+- **Checking**: `tracker-server.log` shows the Teltonika packets and "Unknown device" if the identifier doesn't match.
+
 ## Home Assistant
 
 The native API with `outgoing_connection`: the device dials Home Assistant, so HA never needs to reach it behind the carrier's NAT, and no MQTT broker is involved. Simple and live, but every update is its own small exchange and HA keeps the connection alive with pings, so it costs far more data than the Traccar configuration, and it has no timestamps, so nothing can be replayed. Fine on Wi-Fi or with a generous data plan; details in [networking.md](networking.md).

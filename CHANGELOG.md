@@ -14,6 +14,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - Home Assistant configuration (`examples/car-home-assistant.yaml`): the native API dialled from the device (Home Assistant 2026.10 or later) through a WireGuard tunnel, with latitude, longitude, speed and diagnostics sent only on real changes, and a template device tracker in Home Assistant (docs/home-assistant.md). Uses far more data than the Traccar configuration (docs/configurations.md).
 - Wi-Fi first: while a known Wi-Fi network is connected LTE is switched off, and it comes back when Wi-Fi drops.
 - Nothing is sent to the vehicle bus: only commands the co-processor answers itself.
+- The Traccar server settings the configuration needs (docs/configurations.md).
 
 ### Internal
 
