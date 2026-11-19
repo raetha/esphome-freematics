@@ -4,7 +4,7 @@ Where the project stands, what's decided, and what comes next. Keep this current
 
 ## Status
 
-**Phase 1 (Traccar uplink, GPS, Wi-Fi first) is built and ready to flash**, not yet tried on hardware (as of 2026-11-19). Two configurations: Traccar (the low-data one, the owner's choice) and Home Assistant ([configurations.md](configurations.md)). The packages validate with ESPHome 2026.11.0, the encoder and tracking filter pass their host tests, and CI compiles both examples when run by hand. The dongles have SIM7070G modules on Hologram (APN `hologram`), which is pay as you go: the stock telelogger's 10 to 15 KB on a typical day is the benchmark.
+**Phase 1 (Traccar uplink, GPS, Wi-Fi first) is built and ready to flash**, not yet tried on hardware (as of 2026-11-19). Two configurations: Traccar (the low-data one, the owner's choice) and Home Assistant ([configurations.md](configurations.md)). The packages validate with ESPHome 2026.11.0, the encoder and tracking filter pass their host tests, and CI compiles both examples. The dongles have SIM7070G modules on Hologram (APN `hologram`), which is pay as you go: the stock telelogger's 10 to 15 KB on a typical day is the benchmark.
 
 ## Goal and requirements
 
@@ -31,12 +31,12 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 - **The vehicle bus is read passively only:** no OBD requests, no writes. Active polling may be tested later, carefully. (2026-11-19)
 - **Replayed sensor values in HA** would be hourly long-term statistics through an HA integration in its own repo (HACS: one integration per repo), if HA ever receives the compact uplink directly. (2026-11-19)
 - **One repo for ESPHome work** (this one, on `dev`); whether generic components move elsewhere is decided later. (2026-11-19)
-- **CI runs by hand only** while the repository is private, to save Actions minutes; restored when it goes public. (2026-11-19)
+- **The examples are paste-and-build**: a device config pasted into ESPHome Device Builder fetches the packages and components from GitHub. (2026-11-19)
 - **Build one piece at a time**, YAML stopgap first, then a component that replaces it.
 
 ## Phases
 
-1. **Phases 0 and 1: cellular, GPS to Traccar, Wi-Fi first** (built). Back up the stock flash (`esptool.py --port <port> read_flash 0 0x1000000 stock-car1.bin`). Set `traccar_host` and `traccar_device_id` in `examples/car-traccar.yaml` (the device's existing Traccar identifier works), open UDP 5027 on the Traccar server, and flash over USB. On the bench, watch the USB log: PPP up, `ATGPS` fixes, records queued, "Traccar acknowledged". Then drive: the trip in Traccar with sharp corners, a stop record, heartbeats while parked; Wi-Fi at home switching LTE off and back on when leaving. Read the real data use from Hologram after a few days. *Exit:* a week of commutes in one car with every trip complete in Traccar and data use near the estimate in [configurations.md](configurations.md).
+1. **Phases 0 and 1: cellular, GPS to Traccar, Wi-Fi first** (built). Back up the stock flash (`esptool.py --port <port> read_flash 0 0x1000000 stock-car1.bin`). Paste `examples/car-traccar.yaml` into a new device in ESPHome Device Builder, set `traccar_host` and `traccar_device_id` (the device's existing Traccar identifier works), add the secrets, open UDP 5027 on the Traccar server, and install over USB from the browser. On the bench, watch the USB log: PPP up, `ATGPS` fixes, records queued, "Traccar acknowledged". Then drive: the trip in Traccar with sharp corners, a stop record, heartbeats while parked; Wi-Fi at home switching LTE off and back on when leaving. Read the real data use from Hologram after a few days. *Exit:* a week of commutes in one car with every trip complete in Traccar and data use near the estimate in [configurations.md](configurations.md).
 2. **Phase 2: `freematics_link` component.** Moves the co-processor UART, the GNSS parsing and a GNSS time source into C++, adds battery voltage from `ATRV` and the co-processor version from `ATI`. *Exit:* the same behavior without the lambda.
 3. **Phase 3: store and forward on microSD.** The Traccar uplink's in-memory queue (300 fixes) survives coverage gaps but not a reboot or a long outage; move it to the SD card. *Exit:* three forced outages and two reboots with nothing lost.
 4. **Phase 4: vehicle data, passively.** Find out what the co-processor can hear without sending anything (`ATM1`-style monitoring, broadcast CAN frames); report it once per stop. Many cars put a gateway between the OBD port and their internal buses, so there may be little to hear. Active OBD requests only later, as a separate, carefully tested step.
@@ -59,6 +59,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-19: Repository public; CI automatic again. Examples fetch everything from GitHub so they can be pasted into ESPHome Device Builder; CI builds them from the checkout (`scripts/localize.py`).
 - 2026-11-19: Traccar first: the native API would use about 40 times the data of the stock firmware on a pay-as-you-go plan. Built the `traccar_uplink` component (Teltonika GH3000 over UDP, tracking filter, acknowledged batches), split the package into board, Wi-Fi-first and uplink packages with an example per configuration, and made the vehicle bus read-only.
 - 2026-11-19: Switched phases 0 to 2 from MQTT to the native API dialled from the device, over WireGuard; data use is now the top requirement. SIM7070G modules on Hologram. CI made manual-only.
 - 2026-11-19: Plan drafted; pins and co-processor commands taken from the ONE+ r14 schematic and the FreematicsPlus library; phase 0 config written and validated; repository set up on `dev`.

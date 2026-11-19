@@ -1,14 +1,11 @@
 # One car reporting live to Home Assistant over the native API, through a
 # WireGuard tunnel home (docs/configurations.md, docs/networking.md).
-# Copy into your ESPHome config folder, rename it, and set the substitutions and
-# secrets. CI validates and compiles it with examples/secrets.example.yaml.
 #
-# To use this repository instead of local copies, replace the !include lines with:
-#   packages:
-#     freematics:
-#       url: https://github.com/raetha/esphome-freematics
-#       ref: dev
-#       files: [packages/freematics-oneplus-b.yaml, packages/wifi-first.yaml, packages/uplink-home-assistant.yaml]
+# Paste this whole file into a new device in ESPHome Device Builder, change the
+# substitutions below, and install. Everything else comes from GitHub.
+# Secrets it uses (Device Builder -> Secrets): wifi_ssid, wifi_password,
+# freematics_api_key, freematics_ota_password, and the wg_* keys below.
+# Add the device to Home Assistant once while it's on home Wi-Fi.
 
 substitutions:
   name: freematics-car1
@@ -16,27 +13,30 @@ substitutions:
   cell_apn: hologram
 
 packages:
-  board: !include ../packages/freematics-oneplus-b.yaml
-  wifi_first: !include ../packages/wifi-first.yaml
-  uplink: !include ../packages/uplink-home-assistant.yaml
+  freematics:
+    url: https://github.com/raetha/esphome-freematics
+    ref: dev            # or a test build tag such as 0.1.0-dev.3
+    refresh: 0s         # fetch on every build while things are changing
+    files:
+      - packages/freematics-oneplus-b.yaml
+      - packages/wifi-first.yaml
+      - packages/uplink-home-assistant.yaml
 
 wifi:
   networks:
-    - ssid: !secret wifi_home_ssid
-      password: !secret wifi_home_password
-    - ssid: !secret wifi_second_ssid
-      password: !secret wifi_second_password
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    # More networks: another - ssid: / password: pair.
 
-# The package makes the device dial Home Assistant; the key is per device.
-# Add the device to HA once while it's on home Wi-Fi.
+# The package makes the device dial Home Assistant; the key is per device
+# (32 random bytes, base64: Device Builder's new-device wizard makes one).
 api:
   encryption:
-    key: !secret api_encryption_key
+    key: !secret freematics_api_key
 
 ota:
   - platform: esphome
-    encryption:
-      key: !secret ota_encryption_key
+    password: !secret freematics_ota_password
 
 # Tunnel home so Home Assistant stays private. Only HA's address goes through
 # it; everything else, including SNTP, goes direct.

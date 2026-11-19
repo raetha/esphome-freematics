@@ -12,17 +12,21 @@ Run [ESPHome](https://esphome.io) on the [Freematics ONE+ Model B](https://freem
 
 ## Install
 
-1. Back up the stock firmware first, so you can go back: `esptool.py --port <port> read_flash 0 0x1000000 stock.bin` (restore with `write_flash 0 stock.bin`).
-2. Copy [examples/car-traccar.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/car-traccar.yaml) or [examples/car-home-assistant.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/car-home-assistant.yaml) into your ESPHome config folder, rename it per car, and set its substitutions (name, APN; for Traccar, the server and the device's identifier).
-3. Add the keys from [examples/secrets.example.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/secrets.example.yaml) to your `secrets.yaml` with real values.
-4. Point its `packages:` (and, for Traccar, `external_components:`) at this repository, as the comment at the top of the example shows, or at local copies of `packages/` and `components/`.
-5. Flash the first time over USB (for Home Assistant, then add the device while it's on your Wi-Fi). Later updates go over the air, best on Wi-Fi.
+The examples are complete device configs that fetch everything else from this repository, so nothing needs copying into your ESPHome folder. With ESPHome Device Builder (including the Home Assistant app):
 
-This repository is private, so ESPHome needs credentials to fetch the package from it: either a local copy, or a `url` with a GitHub token (`https://<user>:<token>@github.com/raetha/esphome-freematics`).
+1. Back up the stock firmware if you may want to go back: `esptool.py --port <port> read_flash 0 0x1000000 stock.bin` on a computer with the dongle on USB (restore with `write_flash 0 stock.bin`).
+2. **New device**, then **Edit** it and replace everything with [examples/car-traccar.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/car-traccar.yaml) or [examples/car-home-assistant.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/car-home-assistant.yaml) ([which one](https://github.com/raetha/esphome-freematics/blob/main/docs/configurations.md)).
+3. Change the substitutions at the top: the name, the APN, and for Traccar the server and the device's identifier in Traccar.
+4. Under **Secrets**, add the secrets the example lists at its top (Wi-Fi, an OTA password; for Home Assistant also the API key and the WireGuard keys). [examples/secrets.example.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/secrets.example.yaml) shows their form.
+5. **Install**, with the dongle plugged into the computer you're browsing from: **Plug into this computer**. Later updates go over the air while the car is on your Wi-Fi.
+
+For Home Assistant, add the device to Home Assistant once while it's on your Wi-Fi.
+
+Each build fetches the packages again (`refresh: 0s`), so a new build picks up changes here. Settings in the packages (update intervals, thresholds) are substitutions: set them in the device config's `substitutions:` to override them.
 
 ## Test builds
 
-Changes on `dev` to what a device config pulls in are published as pre-releases tagged `<version>-dev.<n>`. To try one, set the package's `ref:` to that tag (or to `dev` for the latest) and install. To go back, set `ref:` to the last release tag and install again.
+Changes on `dev` to what a device config pulls in are published as pre-releases tagged `<version>-dev.<n>`. To try one, set the package's `ref:` and the external component's `@...` to that tag (or to `dev` for the latest) and install. To go back, set them to `main` (the latest release) and install again. Until the first release, the examples use `dev`.
 
 ## Development
 

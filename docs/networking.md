@@ -16,7 +16,7 @@ ESPHome 2026.11's native API can dial Home Assistant itself (`api: outgoing_conn
 
 The dongle opens a WireGuard tunnel home and reaches Home Assistant through it, so nothing at home is exposed to the internet.
 
-Device side (`examples/car.yaml`):
+Device side (`examples/car-home-assistant.yaml`):
 
 - `address`: the dongle's tunnel address, one per dongle (for example `10.66.0.11` and `10.66.0.12`).
 - `peer_endpoint`: the home WireGuard server's public name or address; `peer_public_key` and an optional `peer_preshared_key`.
