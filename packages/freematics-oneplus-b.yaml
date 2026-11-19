@@ -1,0 +1,293 @@
+# Freematics ONE+ Model B board package for ESPHome 2026.11+
+#
+# Pulls in everything that is the same on every dongle: pins, the cellular
+# modem, the co-processor link (internal GNSS, later OBD), diagnostics, and an
+# MQTT device_tracker for Home Assistant. A device config adds what is its own:
+# name, APN, Wi-Fi networks, WireGuard keys, MQTT broker and credentials.
+# See examples/car.yaml and docs/hardware.md (pin map and sources).
+#
+# Substitutions a device config must set: name, friendly_name, cell_apn.
+
+substitutions:
+  modem_model: SIM7600     # or SIM7070: whichever module is in the xBee socket
+  mqtt_log_level: INFO     # DEBUG streams every co-processor exchange: costly on LTE
+  gnss_poll_interval: 5s
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  project:
+    name: raetha.esphome-freematics
+    version: "0.1.0"
+  on_boot:
+    - priority: 800
+      then:
+        # Keep the STM32 co-processor out of reset (GPIO15, active low).
+        - output.turn_on: coproc_nreset
+    - priority: -100
+      then:
+        # Press the modem's PWRKEY for 200 ms, as the Freematics library does,
+        # give it time to boot, then let ESPHome bring up PPP. A short press
+        # doesn't power off a SIM7600 that is already on (that takes > 2.5 s).
+        - output.turn_on: modem_pwrkey
+        - delay: 200ms
+        - output.turn_off: modem_pwrkey
+        - delay: 8s
+        - modem.enable:
+    - priority: -200
+      then:
+        - delay: 3s
+        - uart.write: { id: coproc, data: "ATGPSON\r" }
+
+esp32:
+  board: esp32dev
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+# ---------- Cellular (xBee socket) ----------
+modem:
+  id: cell
+  model: ${modem_model}
+  apn: ${cell_apn}
+  rx_pin: GPIO35
+  tx_pin:
+    number: GPIO2
+    ignore_strapping_warning: true   # Freematics wiring; only matters at boot
+  baud_rate: 115200
+  enable_on_boot: false               # powered on by on_boot above
+  reboot_timeout: 15min
+  update_interval: 30s
+  on_connect:
+    - logger.log: "Cellular: PPP up"
+  on_disconnect:
+    - logger.log: "Cellular: PPP down"
+
+output:
+  - platform: gpio
+    id: modem_pwrkey
+    pin: GPIO27
+  - platform: gpio
+    id: coproc_nreset
+    pin:
+      number: GPIO15
+      ignore_strapping_warning: true
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+# ---------- Home Assistant over MQTT ----------
+# The device config adds broker, username and password.
+mqtt:
+  id: mqtt_client
+  discovery: true
+  keepalive: 60s          # fewer pings on LTE; also keeps the WireGuard NAT mapping open
+  reboot_timeout: 0s      # never reboot just because the broker is unreachable
+  log_topic:
+    topic: ${name}/debug
+    level: ${mqtt_log_level}
+  on_connect:
+    # ESPHome has no device_tracker entity, so announce one to HA by hand.
+    - mqtt.publish_json:
+        topic: homeassistant/device_tracker/${name}/config
+        retain: true
+        payload: |-
+          root["name"] = nullptr;
+          root["unique_id"] = "${name}_tracker";
+          root["json_attributes_topic"] = "${name}/location";
+          root["source_type"] = "gps";
+          JsonObject dev = root["device"].to<JsonObject>();
+          dev["identifiers"].add(get_mac_address());  // the id ESPHome's own discovery uses
+          dev["name"] = "${friendly_name}";
+
+# ---------- Diagnostics ----------
+debug:
+  update_interval: 60s
+
+sensor:
+  - platform: modem
+    rssi:
+      name: Cellular RSSI
+    ber:
+      name: Cellular bit error rate
+  - platform: uptime
+    name: Uptime
+  - platform: debug
+    free:
+      name: Free heap
+    block:
+      name: Largest free block
+    loop_time:
+      name: Loop time
+  - platform: adc
+    pin: GPIO36
+    name: Battery voltage (ADC)
+    attenuation: 12db
+    update_interval: 30s
+    filters:
+      - multiply: 11.0   # 100k/10k divider; calibrate against a meter
+    accuracy_decimals: 2
+    unit_of_measurement: V
+    device_class: voltage
+  # Internal GNSS, read through the co-processor (filled by the uart lambda below)
+  - platform: template
+    id: gnss_lat
+    name: GNSS latitude
+    accuracy_decimals: 6
+  - platform: template
+    id: gnss_lon
+    name: GNSS longitude
+    accuracy_decimals: 6
+  - platform: template
+    id: gnss_alt
+    name: GNSS altitude
+    unit_of_measurement: m
+    accuracy_decimals: 1
+  - platform: template
+    id: gnss_speed
+    name: GNSS speed
+    unit_of_measurement: km/h
+    accuracy_decimals: 1
+  - platform: template
+    id: gnss_heading
+    name: GNSS heading
+    unit_of_measurement: "°"
+  - platform: template
+    id: gnss_sats
+    name: GNSS satellites
+  - platform: template
+    id: gnss_hdop
+    name: GNSS HDOP (raw)
+
+text_sensor:
+  - platform: modem
+    network_type:
+      name: Cellular network type
+    urc:
+      name: Cellular last URC
+  - platform: debug
+    reset_reason:
+      name: Reset reason
+
+binary_sensor:
+  - platform: template
+    id: gnss_fix
+    name: GNSS fix
+  - platform: template
+    name: Cellular connected
+    device_class: connectivity
+    lambda: return id(cell).is_connected();
+
+# ---------- Co-processor link (STM32F103: OBD and the internal GNSS) ----------
+# Stopgap until the freematics_link component: replies are logged, and ATGPS
+# replies are parsed into the GNSS entities and the device_tracker.
+uart:
+  - id: coproc
+    rx_pin: GPIO13
+    tx_pin: GPIO14
+    baud_rate: 115200
+    rx_buffer_size: 1024
+    debug:
+      direction: BOTH
+      dummy_receiver: true
+      after:
+        delimiter: "\r"
+      sequence:
+        - lambda: |-
+            UARTDebug::log_string(direction, bytes);
+            if (direction != uart::UART_DIRECTION_RX) return;
+            // Reply to ATGPS, per FreematicsPlus.cpp gpsGetData():
+            // $GNIFO,date,time,lat*1e6,lng*1e6,alt*100,speed(knots)*100,heading*100,sats,hdop
+            std::string s(bytes.begin(), bytes.end());
+            auto p = s.find("$GNIFO,");
+            if (p == std::string::npos) return;
+            long v[9] = {0};
+            int n = 0;
+            const char *c = s.c_str() + p + 7;
+            while (n < 9 && *c) {
+              v[n++] = atol(c);
+              const char *q = strchr(c, ',');
+              if (q == nullptr) break;
+              c = q + 1;
+            }
+            if (n < 4 || (v[2] == 0 && v[3] == 0)) {
+              id(gnss_fix).publish_state(false);
+              return;
+            }
+            float lat = v[2] / 1e6f, lon = v[3] / 1e6f;
+            id(gnss_fix).publish_state(true);
+            id(gnss_lat).publish_state(lat);
+            id(gnss_lon).publish_state(lon);
+            if (n > 4) id(gnss_alt).publish_state(v[4] / 100.0f);
+            if (n > 5) id(gnss_speed).publish_state(v[5] / 100.0f * 1.852f);
+            if (n > 6) id(gnss_heading).publish_state(v[6] / 100.0f);
+            if (n > 7) id(gnss_sats).publish_state(v[7]);
+            if (n > 8) id(gnss_hdop).publish_state(v[8]);
+            if (id(mqtt_client).is_connected()) {
+              id(mqtt_client).publish_json("${name}/location", [=](JsonObject root) {
+                root["latitude"] = lat;
+                root["longitude"] = lon;
+                root["gps_accuracy"] = 10;   // placeholder until HDOP's units are confirmed
+              });
+            }
+
+interval:
+  - interval: ${gnss_poll_interval}
+    then:
+      - if:
+          condition:
+            switch.is_on: gnss_polling
+          then:
+            - uart.write: { id: coproc, data: "ATGPS\r" }
+
+switch:
+  - platform: template
+    id: gnss_polling
+    name: GNSS polling
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+button:
+  - platform: restart
+    name: Restart
+  # Answers appear in the log (and the debug topic at DEBUG level)
+  - platform: template
+    name: "Modem: serving cell (AT+CPSI?)"
+    entity_category: diagnostic
+    on_press:
+      - modem.send_at: "AT+CPSI?"
+  - platform: template
+    name: "Modem: operator (AT+COPS?)"
+    entity_category: diagnostic
+    on_press:
+      - modem.send_at: "AT+COPS?"
+  - platform: template
+    name: "Modem: module info (ATI)"
+    entity_category: diagnostic
+    on_press:
+      - modem.send_at: "ATI"
+  - platform: template
+    name: "Co-proc: identify (ATI)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write: { id: coproc, data: "ATI\r" }
+  - platform: template
+    name: "Co-proc: battery (ATRV)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write: { id: coproc, data: "ATRV\r" }
+  - platform: template
+    name: "Co-proc: GNSS on (ATGPSON)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write: { id: coproc, data: "ATGPSON\r" }
+  - platform: template
+    name: "Co-proc: raw NMEA (ATGRR)"
+    entity_category: diagnostic
+    on_press:
+      - uart.write: { id: coproc, data: "ATGRR\r" }
