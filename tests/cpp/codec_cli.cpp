@@ -16,7 +16,7 @@
 #include "teltonika.h"
 #include "tracker.h"
 
-using namespace traccar_uplink;
+using namespace trackcodec;
 
 int main() {
   char cmd[32];

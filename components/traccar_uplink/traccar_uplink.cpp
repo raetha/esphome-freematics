@@ -61,7 +61,7 @@ Record TraccarUplink::base_record_(uint32_t time, Decision why) {
 
 void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh,
                             float course_deg, uint8_t satellites) {
-  uint32_t unix = ::traccar_uplink::gnss_to_unix(ddmmyy, hhmmsscc);
+  uint32_t unix = ::trackcodec::gnss_to_unix(ddmmyy, hhmmsscc);
   if (unix == 0 && !this->now_(&unix))
     return;  // no time yet: nothing useful to record
   this->last_unix_ = unix;
@@ -112,7 +112,7 @@ void TraccarUplink::receive_() {
       return;
     if (!this->in_flight_)
       continue;
-    int accepted = ::traccar_uplink::parse_ack(buf, len, this->location_packet_id_);
+    int accepted = ::trackcodec::parse_ack(buf, len, this->location_packet_id_);
     if (accepted < 0)
       continue;
     size_t n = std::min<size_t>(this->in_flight_count_, this->queue_.size());
@@ -151,7 +151,7 @@ void TraccarUplink::send_() {
   size_t count = std::min<size_t>(this->queue_.size(), this->batch_max_);
   this->batch_.assign(this->queue_.begin(), this->queue_.begin() + count);
   size_t len = 0;
-  while (count > 0 && (len = ::traccar_uplink::encode_packet(this->buf_, sizeof(this->buf_), this->packet_id_,
+  while (count > 0 && (len = ::trackcodec::encode_packet(this->buf_, sizeof(this->buf_), this->packet_id_,
                                                              this->location_packet_id_, this->device_id_.c_str(),
                                                              this->batch_.data(), count)) == 0)
     count--;

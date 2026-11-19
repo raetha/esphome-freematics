@@ -21,10 +21,10 @@
 
 namespace esphome::traccar_uplink {
 
-using ::traccar_uplink::Decision;
-using ::traccar_uplink::Record;
-using ::traccar_uplink::Tracker;
-using ::traccar_uplink::TrackerConfig;
+using ::trackcodec::Decision;
+using ::trackcodec::Record;
+using ::trackcodec::Tracker;
+using ::trackcodec::TrackerConfig;
 
 class TraccarUplink : public Component {
  public:

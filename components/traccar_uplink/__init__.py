@@ -29,7 +29,7 @@ CONF_ON_MOTION_STOP = "on_motion_stop"
 traccar_uplink_ns = cg.esphome_ns.namespace("traccar_uplink")
 TraccarUplink = traccar_uplink_ns.class_("TraccarUplink", cg.Component)
 FlushAction = traccar_uplink_ns.class_("FlushAction", automation.Action)
-TrackerConfig = cg.global_ns.namespace("traccar_uplink").struct("TrackerConfig")
+TrackerConfig = cg.global_ns.namespace("trackcodec").struct("TrackerConfig")
 
 
 def _device_id(value):

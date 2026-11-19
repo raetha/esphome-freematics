@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <cmath>
 
-namespace traccar_uplink {
+namespace trackcodec {
 
 struct TrackerConfig {
   float moving_speed_kmh = 6;        // at or above: moving
@@ -95,4 +95,4 @@ class Tracker {
   float last_course_{0};
 };
 
-}  // namespace traccar_uplink
+}  // namespace trackcodec

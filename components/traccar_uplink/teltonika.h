@@ -13,7 +13,7 @@
 #include <cstring>
 #include <cstddef>
 
-namespace traccar_uplink {
+namespace trackcodec {
 
 // Seconds between 1970-01-01 and 2007-01-01, the GH3000 epoch.
 static constexpr uint32_t GH3000_EPOCH = 1167609600UL;
@@ -148,4 +148,4 @@ inline uint32_t gnss_to_unix(uint32_t ddmmyy, uint32_t hhmmsscc) {
   return static_cast<uint32_t>(days * 86400L + hour * 3600 + minute * 60 + second);
 }
 
-}  // namespace traccar_uplink
+}  // namespace trackcodec
