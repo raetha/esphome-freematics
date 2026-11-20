@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include <numbers>
 
 namespace trackcodec {
 
@@ -16,6 +17,12 @@ struct TrackerConfig {
   float turn_angle_deg = 30;         // course change that records a fix early
   uint32_t min_turn_interval_s = 3;  // but no closer together than this
   uint32_t heartbeat_s = 900;        // while parked; 0: none (telelogger: 900 s)
+  // A trip starts only after this many fixes in a row at moving speed, and
+  // this far from where the car was parked: a still receiver with a weak fix
+  // (indoors, few satellites) reports speeds above walking pace for a fix or
+  // two, and drifts tens of metres.
+  uint8_t start_fixes = 3;
+  float start_distance_m = 50;
 };
 
 enum class Decision : uint8_t { NONE, RECORD, START, STOP, HEARTBEAT };
@@ -28,8 +35,9 @@ class Tracker {
 
   bool moving() const { return this->moving_; }
 
-  // A valid fix at time now (Unix seconds). Returns whether to record it, and why.
-  Decision on_fix(uint32_t now, float speed_kmh, float course_deg) {
+  // A valid fix at time now (Unix seconds). Returns whether to record it, and
+  // why. Without a position (NaN), only the speed decides a trip's start.
+  Decision on_fix(uint32_t now, float speed_kmh, float course_deg, float latitude = NAN, float longitude = NAN) {
     this->last_fix_ = now;
     this->has_fix_ = true;
     bool fast = speed_kmh >= this->config_.moving_speed_kmh;
@@ -37,17 +45,25 @@ class Tracker {
       this->last_fast_ = now;
 
     if (!this->moving_) {
-      if (fast) {
+      if (!this->has_anchor_)
+        this->anchor_(latitude, longitude);
+      this->fast_fixes_ = fast ? this->fast_fixes_ + 1 : 0;
+      if (this->fast_fixes_ >= this->config_.start_fixes &&
+          this->distance_m_(latitude, longitude) >= this->config_.start_distance_m) {
         this->moving_ = true;
+        this->fast_fixes_ = 0;
         return this->recorded_(now, course_deg, Decision::START);
       }
-      if (this->config_.heartbeat_s && (!this->has_record_ || now - this->last_record_ >= this->config_.heartbeat_s))
+      if (this->config_.heartbeat_s && (!this->has_record_ || now - this->last_record_ >= this->config_.heartbeat_s)) {
+        this->anchor_(latitude, longitude);
         return this->recorded_(now, course_deg, Decision::HEARTBEAT);
+      }
       return Decision::NONE;
     }
 
     if (!fast && now - this->last_fast_ >= this->config_.stop_delay_s) {
       this->moving_ = false;
+      this->anchor_(latitude, longitude);
       return this->recorded_(now, course_deg, Decision::STOP);
     }
     uint32_t since = now - this->last_record_;
@@ -82,6 +98,24 @@ class Tracker {
   }
 
  protected:
+  // Where the car is parked, for the start distance.
+  void anchor_(float latitude, float longitude) {
+    this->anchor_lat_ = latitude;
+    this->anchor_lon_ = longitude;
+    this->has_anchor_ = !std::isnan(latitude) && !std::isnan(longitude);
+  }
+
+  // Metres from the parked position (equirectangular, plenty for tens of
+  // metres); infinite when either position is unknown, so speed alone decides.
+  float distance_m_(float latitude, float longitude) const {
+    if (!this->has_anchor_ || std::isnan(latitude) || std::isnan(longitude))
+      return INFINITY;
+    constexpr float deg_to_m = 111195.0f;  // metres per degree of latitude
+    float dlat = (latitude - this->anchor_lat_) * deg_to_m;
+    float dlon = (longitude - this->anchor_lon_) * deg_to_m * std::cos(latitude * std::numbers::pi_v<float> / 180.0f);
+    return std::sqrt(dlat * dlat + dlon * dlon);
+  }
+
   Decision recorded_(uint32_t now, float course, Decision why) {
     this->last_record_ = now;
     this->has_record_ = true;
@@ -97,6 +131,10 @@ class Tracker {
   uint32_t last_fast_{0};
   uint32_t last_record_{0};
   float last_course_{0};
+  bool has_anchor_{false};
+  float anchor_lat_{0};
+  float anchor_lon_{0};
+  uint8_t fast_fixes_{0};
 };
 
 }  // namespace trackcodec

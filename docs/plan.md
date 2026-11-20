@@ -4,7 +4,7 @@ Where the project stands, what's decided, and what comes next. Keep this current
 
 ## Status
 
-**Phase 1 (Traccar uplink, GPS, Wi-Fi first) is built and ready to flash**, not yet tried on hardware (as of 2026-11-19). Two configurations: Traccar (the low-data one, the owner's choice) and Home Assistant ([configurations.md](configurations.md)). The packages validate with ESPHome 2026.11.0, the encoder and tracking filter pass their host tests, and CI compiles both examples. The dongles have SIM7070G modules on Hologram (APN `hologram`), which is pay as you go: the stock telelogger's 10 to 15 KB on a typical day is the benchmark.
+**Phases 1 to 3 work on the owner's dongle (as of 2026-11-20):** GPS to Traccar over Wi-Fi and LTE (SIM7070G, acknowledged), Wi-Fi first, records and logs on the SD card (a drive's records delivered after the fact). Sleep while parked, with motion wake, is built and goes into the car for its first weekend; vehicle data (phase 4) has a listening test built and nothing that sends. The Home Assistant configuration compiles but hasn't been tried. Two configurations: Traccar (the low-data one, the owner's choice) and Home Assistant ([configurations.md](configurations.md)). The dongles have SIM7070G modules on Hologram (APN `hologram`), which is pay as you go: the stock telelogger's 10 to 15 KB on a typical day is the benchmark.
 
 ## Goal and requirements
 
@@ -33,6 +33,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 - **One repo for ESPHome work** (this one, on `dev`); whether generic components move elsewhere is decided later. (2026-11-19)
 - **The examples are paste-and-build**: a device config pasted into ESPHome Device Builder fetches the packages and components from GitHub. (2026-11-19)
 - **Build one piece at a time**, YAML stopgap first, then a component that replaces it.
+- **Sleep while parked is deep sleep**, not the stock firmware's awake standby: the ESP32 sleeps and checks the 12 V voltage and the motion sensor's latched flag once a minute; the module is powered down and the co-processor put in low power. Traccar configuration only for now. (2026-11-20)
+- **Detect hardware variants at run time where possible** (the owner's direction): the co-processor's version and the motion sensor's ID already are; what ESPHome fixes at build time (the modem's pins) stays a substitution. (2026-11-20)
 
 ## Phases
 
@@ -45,10 +47,10 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 | Component | Does | Status |
 | --- | --- | --- |
-| `traccar_uplink` | Tracking filter (moving, turns, start, stop, heartbeat), in-memory queue, Teltonika GH3000 over UDP with acknowledgements, motion triggers | Built (phase 1) |
-| `freematics_link` | Owns the co-processor UART: reset, `ATI` version, `ATGPSON`, `ATGPS` polling into fixes, sensors and a time source, `ATRV` battery voltage; later passive vehicle data | On `dev`, being tested on the bench |
-| `sd_card`, `file_queue` | Generic: mount a microSD card over an ESPHome SPI bus; a first-in, first-out file of fixed-size records that survives resets (two CRC-checked headers). The Traccar uplink keeps every unacknowledged record in one (`packages/sd-traccar.yaml`) | On `dev`, opt-in; to test on the bench (phase 3) |
-| `file_logger` | Generic: the device's log written to a file on the card, in small chunks from the loop, rotated at a size (`packages/sd-logs.yaml`) | On `dev`, opt-in; to test on the bench |
+| `traccar_uplink` | Tracking filter (moving, turns, start, stop, heartbeat), in-memory queue, Teltonika GH3000 over UDP with acknowledgements, motion triggers | Works on the dongle (Wi-Fi and LTE, acknowledged) |
+| `freematics_link` | Owns the co-processor UART: reset, `ATI` version, `ATGPSON`, `ATGPS` polling into fixes, sensors and a time source, `ATRV` battery voltage; later passive vehicle data | Works on the dongle (GPS, version, standby commands) |
+| `sd_card`, `file_queue` | Generic: mount a microSD card over an ESPHome SPI bus; a first-in, first-out file of fixed-size records that survives resets (two CRC-checked headers). The Traccar uplink keeps every unacknowledged record in one (`packages/sd-traccar.yaml`) | Works on the dongle, opt-in (a drive's 111 records kept and delivered) |
+| `file_logger` | Generic: the device's log written to a file on the card by a task of its own, rotated at a size (`packages/sd-logs.yaml`) | Works on the dongle, opt-in |
 
 ## Open questions
 
@@ -60,6 +62,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 - [ ] What the co-processor can hear passively on each car's OBD port.
 
 ## Log
+
+- 2026-11-20: Full review (docs/audits.md). The owner saw a trip start on the bench at a desk: the tracker started a trip on the first fix at 6 km/h, and a still receiver with 4 satellites indoors produces those, drifting tens of metres; in the car that would also have kept standby from ever sleeping (it waits for the tracker to stop). A trip now needs 3 fast fixes in a row and 50 m from the parked position (`traccar_start_fixes`, `traccar_start_distance`). Altitude isn't sent: GH3000 has a 2-byte altitude field, left out to save data; the owner's call. The "took a long time" warnings are SD card writes on the main loop (proposed: a writer task for `file_queue`).
 
 - 2026-11-20: Standby build on the bench (office Wi-Fi): two problems. (1) The modem was enabled although Wi-Fi had connected during the 8 s boot wait (wifi-first skips `modem.disable` while `modem_power_on` runs); now `modem_power_on` waits up to 10 s (`modem_wifi_wait`) for Wi-Fi, and `lte_blocked` (set by wifi-first) stops it pressing or enabling; wifi-first starts the whole power-on when Wi-Fi drops if the module was never started. (2) "Could not resolve" over Wi-Fi after the modem's half-made PPP session: lwIP's DNS servers are global and PPP's replaced Wi-Fi's; `CONFIG_ESP_NETIF_SET_DNS_PER_DEFAULT_NETIF` keeps each interface's and uses the default one's. The IMU is an ICM-42627 (0x75 = 0x20 at 0x68); motion wake now arms its wake-on-motion (accelerometer low power, 50 Hz, threshold in bank 4, `SMD_CONFIG` = 0x05) and the minute check reads `INT_STATUS2`; register values are from TDK's ICM-426xx family map, so the first real test confirms them. Owner's direction: detect hardware variants at run time where possible (the co-processor's version and the IMU's ID already are; the modem's pins can't be, as ESPHome's modem takes them at build time).
 

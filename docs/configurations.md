@@ -8,7 +8,7 @@ The board package (`packages/freematics-oneplus-b.yaml`) is the same for every d
 | Transport | UDP to Traccar's Teltonika port, no tunnel | Native API dialled from the device, through WireGuard |
 | Wire format | Teltonika GH3000 (codec 7): 17 bytes per fix, batched, acknowledged | Protobuf state updates, batched every 2 s; HA pings every 20 s when idle |
 | Driving, one hour (defaults) | about 12 KB | about 200 KB |
-| Parked away from Wi-Fi | about 0.4 KB an hour (a heartbeat every 15 min) | about 55 KB an hour while connected over LTE (no parked mode yet) |
+| Parked away from Wi-Fi | about 0.4 KB an hour (a heartbeat every 15 min); with `packages/standby.yaml` asleep after 13 minutes, a few hundred bytes per 6-hourly report (estimated, not yet measured) | about 55 KB an hour while connected over LTE (no parked mode yet) |
 | A workday: one hour of driving, 8 hours parked at work, the rest at home on Wi-Fi | about 15 KB | about 650 KB |
 | Offline (no signal) | Fixes queue in memory (300 by default, about 50 minutes of driving) and go out when Traccar answers; lost on reboot unless `sd-traccar.yaml` keeps them on the SD card (50,000) | Nothing kept: HA shows unavailable |
 | Track timestamps | Each fix carries its GNSS time | HA's arrival time |
@@ -37,7 +37,7 @@ Both use `packages/wifi-first.yaml`: on a known Wi-Fi network LTE is switched of
 Each GNSS fix goes through a tracking filter in the `traccar_uplink` component, and only some become records:
 
 - **Moving** (speed at or above `traccar_moving_speed`, 6 km/h): a record every `traccar_moving_interval` (10 s), plus one early when the course turns by `traccar_turn_angle` (30°), so corners stay sharp without recording every second.
-- **Trip start**: the first fast fix, with battery voltage and a motion flag.
+- **Trip start**: once `traccar_start_fixes` (3) fixes in a row are fast and the car is `traccar_start_distance` (50 m) from where it was parked, with battery voltage and a motion flag. A still receiver with a weak fix (indoors, few satellites) reports a fast fix now and then and drifts tens of metres, which would otherwise start trips while parked and keep the device from sleeping.
 - **Trip stop**: after `traccar_stop_delay` (180 s, the telelogger's) below moving speed; sent at once, with battery voltage.
 - **Parked**: a heartbeat every `traccar_heartbeat_interval` (15 min, the telelogger's), with battery voltage; `0s` turns it off. Without a fix it carries no position and Traccar keeps the last one.
 
@@ -52,7 +52,7 @@ All of these are substitutions in `packages/uplink-traccar.yaml`; a device confi
 - **Teltonika protocol on port 5027 with UDP**: in Traccar 6, **Settings → Protocols** decides each protocol's port and transport (Disabled, TCP, UDP or All), stored in Traccar's database; `traccar.xml` (`protocols.enable`, `teltonika.port`) only seeds those settings the first time Traccar starts, so editing it later changes nothing. Set Teltonika to UDP or All. Behind Docker or a firewall, publish `5027/udp` explicitly (a plain `-p 5027:5027` is TCP only).
 - **Or the Freematics protocol** (what the stock firmware used, port 5170): `traccar_protocol: freematics` and `traccar_port: "5170"` switch the uplink to it, for checking a server with a protocol known to work. Traccar doesn't answer Freematics positions, so they count as delivered once sent (nothing is resent, and stored records leave the card), and each fix is about 90 bytes of text against 17; the uplink sends a login event, which Traccar does answer, and logs "Traccar answered the login".
 - **The device**: keep its existing identifier; `traccar_device_id` sends it with every packet. Nothing else to set on the device.
-- **`status.timeout`** (default 600 s): longer than the parked heartbeat, or a parked car flips to "unknown" between heartbeats. With the 15 minute heartbeat, 1200 or more.
+- **`status.timeout`** (default 600 s): longer than the parked heartbeat, or a parked car flips to "unknown" between heartbeats. With the 15 minute heartbeat, 1200 or more; with `packages/standby.yaml`, the device reports every 6 hours while asleep, so expect "offline" between reports (Traccar keeps the last position) or raise it past 21600.
 - **Leave `filter.outdated` off** (its default): parked heartbeats without a fix carry no position and would be dropped.
 - **`filter.duplicate`** only catches a repeat of the latest position, so it doesn't help with the rare batch Traccar stores twice (when its acknowledgement is lost). Leave it as you have it.
 - **Trips**: the defaults suit this (motion from speed; a trip ends after `report.trip.minimalParkingDuration`, 300 s, parked).

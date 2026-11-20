@@ -100,7 +100,7 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
   this->last_unix_ = unix;
   this->last_unix_millis_ = now_ms();
 
-  Decision why = this->tracker_.on_fix(unix, speed_kmh, course_deg);
+  Decision why = this->tracker_.on_fix(unix, speed_kmh, course_deg, latitude, longitude);
   if (why == Decision::NONE)
     return;
   Record r = this->base_record_(unix, why);

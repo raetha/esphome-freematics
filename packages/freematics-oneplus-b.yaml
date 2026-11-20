@@ -9,7 +9,7 @@
 # Substitutions a device config must set: name, friendly_name, cell_apn.
 
 substitutions:
-  modem_model: SIM7070          # SIM7070G in the owner's dongles; SIM7600 also works
+  modem_model: SIM7070          # SIM7070G in the owner's dongles; SIM7600 for that module (untested)
   modem_rx_pin: GPIO35          # the library uses GPIO32/GPIO33 instead with co-processor version 13
   modem_tx_pin: GPIO2
   beep_on_boot: "true"          # a 200 ms beep when the firmware has started
@@ -49,9 +49,9 @@ esp32:
     type: esp-idf
     sdkconfig_options:
       # Each network interface keeps its own DNS servers, and the default
-      # interface's are used: without it, a cellular connection that came up
-      # (or half came up) replaced Wi-Fi's DNS servers for good, and names
-      # stopped resolving over Wi-Fi (2026-11-20).
+      # interface's are used. Otherwise lwIP's DNS servers are global: a
+      # cellular connection that comes up (or half comes up) replaces Wi-Fi's
+      # for good, and names stop resolving over Wi-Fi.
       CONFIG_ESP_NETIF_SET_DNS_PER_DEFAULT_NETIF: y
 
 logger:
@@ -112,7 +112,7 @@ modem:
           # The modem component powers the SIM down (AT+CFUN=0) to write the
           # APN, then sends AT+CFUN=4, which on the SIM7070 leaves the SIM off
           # ("+CME ERROR: SIM failure" until a power cycle). Full
-          # functionality brings it back within a second. Bench test 3b.
+          # functionality brings it back within a second.
           - delay: 1s
           - modem.send_at: "AT+CFUN=1"
   on_connect:
@@ -149,7 +149,7 @@ script:
   # Press PWRKEY (200 ms, as the Freematics library does), let the module boot,
   # and only then let ESPHome's modem component talk to it: its recovery bytes
   # (a "+++" escape, CMUX close frames) reaching a module that is still booting
-  # left it silent until the power was cut, every time (bench test 3b). A
+  # leave it silent until its power is cut (docs/plan.md, 2026-11-20). A
   # short press doesn't switch off a module that's already on. Every third try
   # first holds the key 2.5 s, which switches a stuck module off (as the
   # library's end() does), so the next press starts it afresh.

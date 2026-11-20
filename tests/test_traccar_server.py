@@ -33,7 +33,7 @@ def encode(tmp_path_factory):
     subprocess.run(
         [
             CXX,
-            "-std=c++17",
+            "-std=c++20",
             "-I",
             str(ROOT / "components" / "traccar_uplink"),
             str(ROOT / "tests" / "cpp" / "codec_cli.cpp"),
@@ -87,7 +87,7 @@ def test_freematics_login_is_answered(tmp_path):
     subprocess.run(
         [
             CXX,
-            "-std=c++17",
+            "-std=c++20",
             "-I",
             str(ROOT / "components" / "traccar_uplink"),
             str(ROOT / "tests" / "cpp" / "codec_cli.cpp"),

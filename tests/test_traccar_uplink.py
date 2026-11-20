@@ -27,7 +27,7 @@ def cli(tmp_path_factory):
     subprocess.run(
         [
             CXX,
-            "-std=c++17",
+            "-std=c++20",
             "-Wall",
             "-Werror",
             "-I",
@@ -159,10 +159,21 @@ def test_gnss_time_rejects_nonsense(cli):
 
 
 def track(
-    cli, events, moving=6, stop=180, interval=10, turn=30, min_turn=3, heartbeat=900
+    cli,
+    events,
+    moving=6,
+    stop=180,
+    interval=10,
+    turn=30,
+    min_turn=3,
+    heartbeat=900,
+    start_fixes=1,
+    start_distance=0,
 ):
+    """Run events through the tracker. The start rule is off unless asked for."""
     lines = [
-        f"track {moving} {stop} {interval} {turn} {min_turn} {heartbeat} {len(events)}"
+        f"track {moving} {stop} {interval} {turn} {min_turn} {heartbeat} "
+        f"{start_fixes} {start_distance} {len(events)}"
     ]
     lines += [" ".join(str(x) for x in e) for e in events]
     return cli("\n".join(lines) + "\n")
@@ -192,6 +203,90 @@ def test_trip(cli):
         "NONE",
         "NONE",
         "RECORD",
+        "STOP",
+        "NONE",
+    ]
+
+
+# About 11 m per 0.0001 degree of latitude.
+PARKED = (52.0, 13.0)
+
+
+def test_gps_drift_while_parked_starts_no_trip(cli):
+    """A still receiver with a weak fix: a few fast fixes, within tens of metres."""
+    lat, lon = PARKED
+    events = [
+        ("at", 0, 0, 0, lat, lon),
+        ("at", 2, 9, 40, lat + 0.0001, lon),  # one fast fix
+        ("at", 4, 0, 0, lat, lon),
+        ("at", 6, 8, 10, lat + 0.0002, lon),  # three in a row, but 22 m away
+        ("at", 8, 11, 10, lat + 0.0002, lon + 0.0001),
+        ("at", 10, 7, 10, lat + 0.0003, lon),
+    ]
+    assert track(cli, events, start_fixes=3, start_distance=50) == [
+        "HEARTBEAT",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+    ]
+
+
+def test_trip_starts_after_sustained_speed_and_distance(cli):
+    lat, lon = PARKED
+    events = [
+        ("at", 0, 0, 0, lat, lon),
+        ("at", 2, 20, 0, lat + 0.0002, lon),  # 22 m
+        ("at", 4, 25, 0, lat + 0.0004, lon),  # 44 m
+        ("at", 6, 30, 0, lat + 0.0006, lon),  # 67 m, third fast fix: start
+        ("at", 8, 30, 0, lat + 0.0008, lon),
+    ]
+    assert track(cli, events, start_fixes=3, start_distance=50) == [
+        "HEARTBEAT",
+        "NONE",
+        "NONE",
+        "START",
+        "NONE",
+    ]
+
+
+def test_trip_start_needs_fixes_in_a_row(cli):
+    lat, lon = PARKED
+    far = lat + 0.001  # 111 m
+    events = [
+        ("at", 0, 0, 0, lat, lon),
+        ("at", 2, 20, 0, far, lon),
+        ("at", 4, 20, 0, far, lon),
+        ("at", 6, 2, 0, far, lon),  # slow: the count starts again
+        ("at", 8, 20, 0, far, lon),
+        ("at", 10, 20, 0, far, lon),
+        ("at", 12, 20, 0, far, lon),
+    ]
+    assert track(cli, events, start_fixes=3, start_distance=50) == [
+        "HEARTBEAT",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+        "START",
+    ]
+
+
+def test_parked_position_moves_with_each_stop(cli):
+    """After a trip, the distance counts from where it stopped."""
+    lat, lon = PARKED
+    far = lat + 0.01  # about 1.1 km away
+    events = [
+        ("at", 0, 0, 0, lat, lon),
+        ("at", 2, 30, 0, far, lon),  # start (one fast fix needed here)
+        ("at", 200, 0, 0, far, lon),  # 198 s slow: stop, parked at far
+        ("at", 202, 9, 0, far + 0.0001, lon),  # drift 11 m from there: no trip
+    ]
+    assert track(cli, events, start_fixes=1, start_distance=50) == [
+        "HEARTBEAT",
+        "START",
         "STOP",
         "NONE",
     ]
@@ -282,7 +377,7 @@ def backlog_exe(tmp_path_factory):
     subprocess.run(
         [
             CXX,
-            "-std=c++17",
+            "-std=c++20",
             "-Wall",
             "-Werror",
             "-I",

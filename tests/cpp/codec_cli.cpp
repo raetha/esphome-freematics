@@ -92,8 +92,10 @@ int main() {
       std::printf("%u\n", gnss_to_unix(d, t));
     } else if (!std::strcmp(cmd, "track")) {
       TrackerConfig c;
-      unsigned stop, interval, min_turn, hb, n;
-      std::scanf("%f %u %u %f %u %u %u", &c.moving_speed_kmh, &stop, &interval, &c.turn_angle_deg, &min_turn, &hb, &n);
+      unsigned stop, interval, min_turn, hb, start_fixes, n;
+      std::scanf("%f %u %u %f %u %u %u %f %u", &c.moving_speed_kmh, &stop, &interval, &c.turn_angle_deg, &min_turn, &hb,
+                 &start_fixes, &c.start_distance_m, &n);
+      c.start_fixes = static_cast<uint8_t>(start_fixes);
       c.stop_delay_s = stop;
       c.moving_interval_s = interval;
       c.min_turn_interval_s = min_turn;
@@ -109,6 +111,10 @@ int main() {
           float speed, course;
           std::scanf("%f %f", &speed, &course);
           d = tr.on_fix(t, speed, course);
+        } else if (!std::strcmp(kind, "at")) {  // a fix with a position
+          float speed, course, lat, lon;
+          std::scanf("%f %f %f %f", &speed, &course, &lat, &lon);
+          d = tr.on_fix(t, speed, course, lat, lon);
         } else {
           d = tr.on_tick(t);
         }

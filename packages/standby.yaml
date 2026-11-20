@@ -1,6 +1,6 @@
 # Sleep while parked, like the stock firmware's standby but deeper: once the
 # car has been off and still for standby_after, the device sends what it has,
-# switches the cellular module off (AT+CPOWD=1), puts the GNSS and co-processor
+# switches the cellular module off (AT+CPOWD=1, AT+CPOF on a SIM7600), puts the GNSS and co-processor
 # in low power (ATGPSOFF, ATLP) and puts the ESP32 into deep sleep.
 #
 # Every standby_check it wakes for a fraction of a second, reads the battery
@@ -147,6 +147,16 @@ script:
             lambda: return id(coproc_link).in_standby();
           timeout: 5s
       - delay: 1s                 # the ATLP reply
+      - if:
+          condition:
+            lambda: return id(modem_synced);
+          then:
+            # Out of PPP and CMUX first, then the module's own power-down.
+            - modem.disable:
+            - delay: 5s
+            # The module's own power-down, as Freematics' library sends it
+            - modem.send_at: !lambda 'return std::string("${modem_model}") == "SIM7070" ? "AT+CPOWD=1" : "AT+CPOF";'
+            - delay: 3s
       - lambda: |-
           // ICM-42627 wake-on-motion (TDK's ICM-426xx register map): the
           // accelerometer alone in low-power mode at 50 Hz, a flag latched in
@@ -182,15 +192,6 @@ script:
             ESP_LOGI("standby", "Motion wake set (%d mg)", ${standby_motion_mg});
           else
             ESP_LOGW("standby", "Couldn't set the motion sensor up: no motion wake");
-      - if:
-          condition:
-            lambda: return id(modem_synced);
-          then:
-            # Out of PPP and CMUX first, then the module's own power-down.
-            - modem.disable:
-            - delay: 5s
-            - modem.send_at: "AT+CPOWD=1"
-            - delay: 3s
       - logger.log: "Standby: sleeping"
       - lambda: |-
           // Hold the power key released, the co-processor out of reset and

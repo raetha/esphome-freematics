@@ -45,7 +45,7 @@ Approximate, per dongle; phase 1 should check them against Hologram's usage page
 So:
 
 - **Driving:** position updates (only when the car has moved about 10 m) plus a few diagnostics, batched, come to roughly 250 bytes on the wire (the packet and HA's acknowledgement) every 5 seconds at most: about 0.2 MB per hour of driving.
-- **Parked, powered and connected over LTE:** HA's pings dominate, about 1.3 MB a day (about 40 MB a month). That is the next thing to cut: phase 1 adds a parked mode that turns the modem off (or the device sleeps) once the car has been off for a few minutes. On home Wi-Fi it costs no cellular data.
+- **Parked, powered and connected over LTE:** HA's pings dominate, about 1.3 MB a day (about 40 MB a month). Sleep while parked (`packages/standby.yaml`) cuts it in the Traccar configuration; it doesn't support the Home Assistant configuration yet. On home Wi-Fi it costs no cellular data.
 - **Every entity costs data.** The package keeps only what testing needs, sends each value only on a real change (with a 15 minute ceiling), and has no altitude or heading entities. Buttons and switches cost nothing until pressed, apart from the entity list on reconnect.
 
 ### Native API or MQTT

@@ -25,7 +25,7 @@ def exe(tmp_path_factory):
     subprocess.run(
         [
             CXX,
-            "-std=c++17",
+            "-std=c++20",
             "-Wall",
             "-Werror",
             "-I",
