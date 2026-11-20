@@ -14,7 +14,7 @@
 # Secrets it uses: wifi_ssid, wifi_password, freematics_api_key.
 
 substitutions:
-  name: freematics-eli            # the device's existing name, so it installs over the air
+  name: freematics-test           # your device's name in ESPHome, so it installs over the air
   probe_rx_pin: GPIO35
   probe_tx_pin: GPIO2
 

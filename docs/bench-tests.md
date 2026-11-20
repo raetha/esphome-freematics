@@ -72,7 +72,7 @@ Done on 2026-11-20: on its own, ESPHome's modem component synced in 2 s, and onc
 1. Install it, then **unplug the dongle for 10 seconds** and plug it back in (installing over USB restarts the ESP32 but not the modem, which then starts in its last session). Leave the logs open for two minutes.
 2. Install the same config again over Wi-Fi (a restart with the modem still powered, as after any update) and leave the logs open for two minutes.
 
-**Look for:** a 200 ms beep at start; "Cellular: PPP up", and whether "Failed to enter PPP. Resetting modem." follows (after step 2 especially); "Modem not responding at 115200 baud" means the buzzer or the voltage reading gets in the way.
+**Look for:** a 200 ms beep at start; "Cellular: restarting the module (AT+CFUN=1,1)" at the first sync, then a second "modem synced" about 10 s later; "Cellular: PPP up", and whether "Failed to enter PPP. Resetting modem." follows (after step 2 especially); "Modem not responding at 115200 baud" means the buzzer or the voltage reading gets in the way.
 
 **Send back:** both logs. Then paste the normal config back.
 

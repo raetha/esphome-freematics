@@ -16,7 +16,7 @@
 # Secrets it uses: wifi_ssid, wifi_password, freematics_api_key.
 
 substitutions:
-  name: freematics-eli            # the device's existing name, so it installs over the air
+  name: freematics-test           # your device's name in ESPHome, so it installs over the air
   modem_rx_pin: GPIO35
   modem_tx_pin: GPIO2
   cell_apn: hologram
@@ -79,16 +79,19 @@ modem:
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
     - logger.log: "Cellular: modem synced"
-    # The modem component powers the SIM down (AT+CFUN=0) to write the APN, then
-    # asks for AT+CFUN=4, which on the SIM7070 seems to leave the SIM unpowered
-    # ("+CME ERROR: SIM failure"; the raw probe, which sends no CFUN, saw it READY).
-    # Full functionality powers it up; the component's own later CFUN=1 is then a no-op.
-    - delay: 1s
-    - modem.send_at: "AT+CFUN?"
-    - delay: 2s
-    - modem.send_at: "AT+CFUN=1"
-    - delay: 5s
-    - modem.send_at: "AT+CPIN?"
+    # As in the board package: the first answer after boot restarts the module
+    # (it keeps power across ESP32 restarts), and every later one powers the SIM
+    # up (the modem component's AT+CFUN=4 leaves the SIM7070's SIM off).
+    - if:
+        condition:
+          lambda: return !id(modem_restarted);
+        then:
+          - globals.set: { id: modem_restarted, value: "true" }
+          - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
+          - modem.send_at: "AT+CFUN=1,1"
+        else:
+          - delay: 1s
+          - modem.send_at: "AT+CFUN=1"
   on_connect:
     - logger.log: "Cellular: PPP up"
   on_disconnect:
@@ -133,6 +136,9 @@ output:
     frequency: 2000Hz
 
 globals:
+  - id: modem_restarted
+    type: bool
+    initial_value: "false"
   - id: modem_synced
     type: bool
     initial_value: "false"

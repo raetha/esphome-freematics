@@ -61,6 +61,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: The owner asked for a modem power cycle at every ESP32 boot (a car dongle rarely loses power). The board can't cut the module's power, so the first sync after boot sends `AT+CFUN=1,1` (the SIM7070's full restart); the next sync gets the CFUN=1 SIM fix. Substitution `modem_restart_on_boot`. The battery ADC reads near 0 V on USB, which can't affect the modem; the bench test confirms.
+
 - 2026-11-20: Bench 3b with the co-processor link: the modem still synced, so the link isn't the blocker (left: buzzer, battery ADC, SD card, file logger, uplink, Wi-Fi first). That run started with the modem still in the previous run's CMUX/PPP session (the ESP32 restarted over USB, the modem kept power: `Autodetect mode: 5`, "Modem warm reboot. Exiting CMUX"); after that, each try reached `starting PPP` and failed to enter CMUX ("Failed to enter PPP. Resetting modem.", PPP error 5), every 20 s. The next run power-cycles the dongle first, then restarts over Wi-Fi to see whether a warm restart always breaks PPP. If it does, the board package needs a way to restart the module at boot (an update or crash restarts only the ESP32).
 
 - 2026-11-20: Confirmed: after `AT+CFUN=1` the SIM was READY within a second and PPP came up 5 s later (Hologram IP, DNS 8.8.8.8). The board package now sends `AT+CFUN=1` on every modem sync. Upstream: ESPHome's modem component should power the SIM7070 up with CFUN=1 (its CFUN=4 step leaves the SIM off); to report once the full config connects. Bench 3b now adds the co-processor link beside the modem.
