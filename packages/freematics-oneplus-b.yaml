@@ -10,6 +10,8 @@
 
 substitutions:
   modem_model: SIM7070          # SIM7070G in the owner's dongles; SIM7600 also works
+  modem_rx_pin: GPIO35          # the library uses GPIO32/GPIO33 instead with co-processor version 13
+  modem_tx_pin: GPIO2
   modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   coproc_log_level: DEBUG       # VERBOSE also logs every GNSS reply (set logger_level: VERBOSE too)
@@ -47,10 +49,8 @@ modem:
   id: cell
   model: ${modem_model}
   apn: ${cell_apn}
-  rx_pin: GPIO35
-  tx_pin:
-    number: GPIO2
-    ignore_strapping_warning: true   # Freematics wiring; only matters at boot
+  rx_pin: ${modem_rx_pin}
+  tx_pin: ${modem_tx_pin}             # GPIO2 is a strapping pin: ESPHome warns, harmlessly (only matters at boot)
   baud_rate: 115200
   enable_on_boot: false               # powered on by modem_power_on
   reboot_timeout: ${modem_reboot_timeout}
