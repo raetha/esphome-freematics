@@ -1,5 +1,6 @@
 #include "file_queue.h"
 
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 
 namespace esphome::file_queue {
@@ -28,13 +29,23 @@ void FileQueue::setup() {
   }
 }
 
+void FileQueue::loop() {
+  uint32_t now = App.get_loop_component_start_time();
+  if (!this->is_ready() || !this->file_.dirty() || now - this->last_sync_ < this->sync_interval_)
+    return;
+  this->last_sync_ = now;
+  if (!this->file_.sync())
+    this->io_failed_("sync");
+}
+
 void FileQueue::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "File queue:\n"
                 "  Path: %s\n"
-                "  Capacity: %u records of %u bytes\n"
+                "  Capacity: %u records of %u bytes, synced every %u s\n"
                 "  Held: %u",
-                this->path_, (unsigned) this->capacity_, this->record_size_, (unsigned) this->file_.size());
+                this->path_, (unsigned) this->capacity_, this->record_size_, (unsigned) (this->sync_interval_ / 1000),
+                (unsigned) this->file_.size());
 }
 
 void FileQueue::io_failed_(const char *what) {

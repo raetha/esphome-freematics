@@ -122,6 +122,11 @@ void FreematicsLink::loop() {
       if (this->reset_pin_ != nullptr && now - this->state_since_ >= 50)
         this->reset_pin_->digital_write(true);
       if (now - this->state_since_ >= 1000) {  // give the co-processor time to start
+        // What arrived while it was in reset or starting is noise, not a reply.
+        uint8_t c;
+        while (this->available() > 0 && this->read_byte(&c)) {
+        }
+        this->rx_len_ = 0;
         this->state_ = State::IDENTIFYING;
         this->state_since_ = now;
       }

@@ -16,6 +16,7 @@ DOMAIN = "file_queue"
 MULTI_CONF = True
 
 CONF_CAPACITY = "capacity"
+CONF_SYNC_INTERVAL = "sync_interval"
 
 file_queue_ns = cg.esphome_ns.namespace("file_queue")
 FileQueue = file_queue_ns.class_("FileQueue", cg.Component)
@@ -33,6 +34,10 @@ CONFIG_SCHEMA = cv.Schema(
         cv.GenerateID(): cv.declare_id(FileQueue),
         cv.Required(CONF_PATH): _path,
         cv.Optional(CONF_CAPACITY, default=10000): cv.int_range(min=1, max=10_000_000),
+        # How often changes are synced to the card; a power cut loses at most this much.
+        cv.Optional(
+            CONF_SYNC_INTERVAL, default="30s"
+        ): cv.positive_time_period_milliseconds,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -42,4 +47,5 @@ async def to_code(config):
     await cg.register_component(var, config)
     cg.add(var.set_path(config[CONF_PATH]))
     cg.add(var.set_capacity(config[CONF_CAPACITY]))
+    cg.add(var.set_sync_interval(config[CONF_SYNC_INTERVAL]))
     cg.add_define("USE_FILE_QUEUE")

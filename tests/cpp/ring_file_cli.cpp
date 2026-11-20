@@ -7,6 +7,7 @@
 //   pop:<n>       remove n records; prints "pop ok"
 //   read:<i>:<n>  print the byte values of n records from the i-th oldest, or "read no"
 //   size          print the record count
+//   sync          sync to the disk; prints "sync ok", "sync no", and whether it was dirty
 // The first line printed is how the file was opened.
 
 #include <cstdio>
@@ -50,6 +51,9 @@ int main(int argc, char **argv) {
         printf(same ? " %u" : " ?", out[size_t(r) * record_size]);
       }
       printf("\n");
+    } else if (strcmp(op, "sync") == 0) {
+      bool was_dirty = q.dirty();
+      printf("sync %s%s\n", q.sync() ? "ok" : "no", was_dirty ? " (dirty)" : "");
     } else if (strcmp(op, "size") == 0) {
       printf("size %u\n", static_cast<unsigned>(q.size()));
     } else {

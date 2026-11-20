@@ -8,6 +8,12 @@
 // sequence number and a CRC, into the slot that doesn't hold the current one.
 // Opening picks the valid header with the highest sequence number, so a write
 // cut short by a reset leaves the previous state intact.
+//
+// The file is made full size when it's created, so later writes only overwrite
+// and never change the file's length or its directory entry. Changes are
+// flushed to the file system at once but synced to the card only by sync(),
+// which the owner calls now and then: a sync can take tens of milliseconds on
+// an SD card, and a reset before one loses at most the changes since the last.
 
 #include <cstdint>
 #include <cstdio>
@@ -107,6 +113,10 @@ class RingFile {
       if (this->read_header_(&found) && found.record_size == record_size && found.format == format &&
           found.capacity == capacity) {
         this->header_ = found;
+        if (!this->allocate_()) {
+          this->close();
+          return OpenResult::FAILED;
+        }
         return OpenResult::LOADED;
       }
       fclose(this->file_);
@@ -179,6 +189,21 @@ class RingFile {
 
   bool clear() { return this->pop(this->header_.count); }
 
+  /// Whether there are changes not yet synced to the card.
+  bool dirty() const { return this->dirty_; }
+
+  /// Make every change so far survive a power cut.
+  bool sync() {
+    if (this->file_ == nullptr)
+      return false;
+    if (!this->dirty_)
+      return true;
+    if (fflush(this->file_) != 0 || fsync(fileno(this->file_)) != 0)
+      return false;
+    this->dirty_ = false;
+    return true;
+  }
+
  protected:
   long offset_(uint32_t slot) const {  // NOLINT(google-runtime-int): fseek's type
     return static_cast<long>(DATA_OFFSET + size_t(slot) * this->header_.record_size);  // NOLINT(google-runtime-int)
@@ -217,11 +242,23 @@ class RingFile {
     this->header_.head = 0;
     this->header_.count = 0;
     Header first = this->header_;
-    if (!this->commit_(first)) {
+    if (!this->commit_(first) || !this->allocate_() || !this->sync()) {
       this->close();
       return false;
     }
     return true;
+  }
+
+  /// Make the file its full size, if it isn't yet, by writing its last byte.
+  bool allocate_() {
+    long end = this->offset_(this->header_.capacity);  // NOLINT(google-runtime-int)
+    if (fseek(this->file_, 0, SEEK_END) != 0)
+      return false;
+    if (ftell(this->file_) >= end)
+      return true;
+    uint8_t zero = 0;
+    this->dirty_ = true;
+    return this->write_at_(end - 1, &zero, 1) && fflush(this->file_) == 0;
   }
 
   /// Write next as the new header, into the slot the current one isn't in.
@@ -230,14 +267,16 @@ class RingFile {
     uint8_t buf[HEADER_SIZE];
     detail::encode(next, buf);
     long slot = (next.sequence % 2) * HEADER_SIZE;  // NOLINT(google-runtime-int)
-    if (!this->write_at_(slot, buf, sizeof(buf)) || fflush(this->file_) != 0 || fsync(fileno(this->file_)) != 0)
+    if (!this->write_at_(slot, buf, sizeof(buf)) || fflush(this->file_) != 0)
       return false;
     this->header_ = next;
+    this->dirty_ = true;
     return true;
   }
 
   FILE *file_{nullptr};
   Header header_;
+  bool dirty_{false};
 };
 
 }  // namespace ringfile
