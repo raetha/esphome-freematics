@@ -18,7 +18,7 @@ ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogge
 
 - `pip install -r requirements-dev.txt`, then `pytest tests/` (builds the component's plain C++ parts with g++), `ruff check scripts/ tests/ components/`, `ruff format --check scripts/ tests/ components/`, clang-format and clang-tidy as `docs/development.md` → "Setup and testing" shows, `python3 scripts/markdown.py --check $(git ls-files '*.md')` and `python3 scripts/release.py check`.
 - `python3 scripts/localize.py examples/<name>.yaml build/local`, `cp examples/secrets.example.yaml build/local/secrets.yaml`, then `esphome config build/local/<name>.yaml` and `esphome compile` for each example and `tests/components/*/test.*.yaml` (the owner let Espressif's and PlatformIO's download hosts through the session proxy; the first compile takes a few minutes). A real Traccar can run in the session for `tests/test_traccar_server.py` (`docs/development.md`).
-- Lambdas and C++ only prove themselves at compile time: put them on a `try/` branch with a pull request and let CI compile before merging.
+- Lambdas and C++ only prove themselves at compile time: compile every affected config locally before pushing. While the owner is bench-testing (until the first release), changes that pass the local checks and compiles go straight to `dev`, so he can install them at once (Device Builder fetches `dev` at build time; no test build or CI run to wait for); a `try/` branch and pull request is for changes that need his decision first.
 
 ## Hard-won facts (details in docs/hardware.md and docs/networking.md)
 
