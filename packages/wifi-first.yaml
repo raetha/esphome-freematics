@@ -2,10 +2,18 @@
 # when Wi-Fi drops, LTE comes back. Like the telelogger, which joins Wi-Fi when
 # it finds it and shuts the cellular connection down.
 #
+# While the car is moving and Wi-Fi isn't connected, the Wi-Fi search pauses:
+# scanning every few seconds on the road finds nothing and is radio noise beside
+# the GNSS antenna. A connection made before moving (a phone hotspot) is kept.
+# The search resumes once the car has been still a while, or GNSS has had no fix
+# for a while (a garage), so home Wi-Fi is found soon after parking.
+#
 # Needs the board package and a wifi: block with networks in the device config.
 
 substitutions:
   lte_back_after: 30s     # Wi-Fi gone this long: turn LTE back on
+  wifi_pause_speed: "10"  # km/h: at or above, with no Wi-Fi connected, stop searching for Wi-Fi; "1000": never pause
+  wifi_resume_after: "30" # seconds below that speed (or without a GNSS fix) before searching again
   lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
 
 wifi:
@@ -36,6 +44,39 @@ wifi:
         then:
           - logger.log: "Wi-Fi gone: turning LTE on"
           - modem.enable:
+
+globals:
+  - id: wifi_moving_ms             # millis() when the car was last seen moving; 0: not yet
+    type: uint32_t
+    initial_value: "0"
+
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          uint32_t now = millis();
+          bool fresh = id(gnss_fix_ms) != 0 && now - id(gnss_fix_ms) < 30000;
+          if (fresh && id(gnss_kmh) >= ${wifi_pause_speed})
+            id(wifi_moving_ms) = now;
+      - if:
+          condition:
+            and:
+              - wifi.enabled:
+              - not:
+                  wifi.connected:
+              - lambda: return id(wifi_moving_ms) != 0 && millis() - id(wifi_moving_ms) < 1000;
+          then:
+            - logger.log: "Moving: Wi-Fi search paused until the car stops"
+            - wifi.disable:
+      - if:
+          condition:
+            and:
+              - not:
+                  wifi.enabled:
+              - lambda: return millis() - id(wifi_moving_ms) >= ${wifi_resume_after} * 1000UL;
+          then:
+            - logger.log: "Still: searching for Wi-Fi again"
+            - wifi.enable:
 
 esphome:
   on_boot:

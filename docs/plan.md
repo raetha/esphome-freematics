@@ -61,6 +61,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: Wi-Fi search paused while moving with no Wi-Fi connected (owner's call: a hotspot connected before moving stays), resumed after 30 s still or without a fix. The next drive shows whether the scanning hurt GNSS.
+
 - 2026-11-20: First drive (0.1.0-dev.11, OBD power, SD log at VERBOSE, about 27 minutes): the modem never answered on the car's power either (47 PWRKEY presses over the morning, no byte back), so power isn't the cause. No GNSS fix for the first 9 minutes of driving (the device had sat in the garage, and unplugging it from the bench means a cold start), then 4 to 5 satellites, flickering for 4 minutes, then steady; 111 records went to the card for Traccar. Wi-Fi scanned every few seconds the whole drive. The stock firmware's CSV files on the card show cellular signal readings (key 81, -51 to -111 dBm), so this dongle's module has worked under the stock firmware, and 5 to 10 satellites on the same roads; it also polled OBD speed, RPM, throttle, load and coolant at about 1 Hz. The stock firmware sends the GNSS one more command after `ATGPSON`: `ATGDS` with a u-blox M10 `CFG-VALSET` that only sets NMEA message rates.
 
 - 2026-11-20: Beeps as the stock firmware (`telelogger.ino`): 50 ms at 2 kHz on GPIO25 when Wi-Fi or cellular comes up, plus 200 ms at start-up so a running device can be heard in the car; `beep_on_boot` and `beep_on_network` turn them off.
