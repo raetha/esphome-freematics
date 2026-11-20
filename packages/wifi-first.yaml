@@ -29,6 +29,7 @@ wifi:
           lambda: return !${lte_on_wifi};
         then:
           - logger.log: "Wi-Fi up: turning LTE off"
+          - globals.set: { id: lte_blocked, value: "true" }
           - if:
               condition:
                 not:
@@ -43,7 +44,20 @@ wifi:
             wifi.connected:
         then:
           - logger.log: "Wi-Fi gone: turning LTE on"
-          - modem.enable:
+          - globals.set: { id: lte_blocked, value: "false" }
+          - if:
+              condition:
+                lambda: return id(modem_synced);
+              then:
+                - modem.enable:
+              else:
+                # The module was never started (Wi-Fi was up from the start)
+                - if:
+                    condition:
+                      not:
+                        script.is_running: modem_power_on
+                    then:
+                      - script.execute: modem_power_on
 
 globals:
   - id: wifi_moving_ms             # millis() when the car was last seen moving; 0: not yet

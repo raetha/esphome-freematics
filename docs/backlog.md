@@ -16,4 +16,3 @@ Ideas evaluated and set aside for now, and why. Check here before proposing some
 | Writing back-dated location states into Home Assistant's recorder database | Unsupported and can break on schema upgrades; an open question in plan.md. |
 | IMU (motion wake-up, harsh braking), deep sleep on low battery voltage | After OBD works. |
 | Ideas from Car-Assistant (ShonP40's ESPHome car tracker on a LilyGO T-SIM7600, Home Assistant over WireGuard or MQTT) | For the Home Assistant configuration: a Bluetooth iBeacon so the HA app shows which phones are in the car; a location-accuracy entity for the template device tracker; buttons to restart the modem and the ESP32; restarting the modem when GPS stops recovering. Not data-saving, and nothing from the vehicle bus. |
-| Waking on motion (the IMU), to report a car moved while it's off (towing, theft) | The IMU's model and interrupt pin on the Model B aren't confirmed; `packages/standby.yaml` logs its WHO_AM_I to find out. |

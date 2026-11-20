@@ -17,6 +17,7 @@ substitutions:
   modem_restart_on_boot: "true" # restart the module the first time it answers after each boot (it keeps power across ESP32 restarts)
   modem_pwrkey_press: 200ms     # the Freematics library's press
   modem_pwrkey_tries: "6"       # presses until the module answers; every third try first switches it off (a stuck module)
+  modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi (packages/wifi-first.yaml): at home the module isn't started at all
   modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
   modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
@@ -46,6 +47,12 @@ esp32:
   flash_size: 16MB
   framework:
     type: esp-idf
+    sdkconfig_options:
+      # Each network interface keeps its own DNS servers, and the default
+      # interface's are used: without it, a cellular connection that came up
+      # (or half came up) replaced Wi-Fi's DNS servers for good, and names
+      # stopped resolving over Wi-Fi (2026-11-20).
+      CONFIG_ESP_NETIF_SET_DNS_PER_DEFAULT_NETIF: y
 
 logger:
   level: ${logger_level}
@@ -146,15 +153,26 @@ script:
   # short press doesn't switch off a module that's already on. Every third try
   # first holds the key 2.5 s, which switches a stuck module off (as the
   # library's end() does), so the next press starts it afresh.
-  # packages/wifi-first.yaml turns LTE off again if Wi-Fi is already up.
+  # packages/wifi-first.yaml sets lte_blocked while Wi-Fi is up: then the
+  # module isn't started, or the modem component isn't enabled.
   - id: modem_power_on
+    mode: single
     then:
+      - wait_until:
+          condition:
+            lambda: return id(lte_blocked);
+          timeout: ${modem_wifi_wait}
+      - if:
+          condition:
+            lambda: return id(lte_blocked);
+          then:
+            - logger.log: "Cellular: Wi-Fi is up; the module stays off"
       - repeat:
           count: ${modem_pwrkey_tries}
           then:
             - if:
                 condition:
-                  lambda: return !id(modem_synced);
+                  lambda: return !id(modem_synced) && !id(lte_blocked);
                 then:
                   - if:
                       condition:
@@ -171,10 +189,16 @@ script:
                   - delay: ${modem_pwrkey_press}
                   - output.turn_off: modem_pwrkey
                   - delay: ${modem_boot_wait}
-                  - modem.enable:
+                  - if:
+                      condition:
+                        lambda: return !id(lte_blocked);
+                      then:
+                        - modem.enable:
                   - delay: ${modem_pwrkey_wait}
-
 globals:
+  - id: lte_blocked              # set by packages/wifi-first.yaml while Wi-Fi is up
+    type: bool
+    initial_value: "false"
   - id: modem_restarted          # the module has been restarted since the ESP32 started
     type: bool
     initial_value: "false"

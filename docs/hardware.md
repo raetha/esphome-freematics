@@ -1,6 +1,6 @@
 # Hardware: Freematics ONE+ Model B
 
-Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](https://freematics.com/dl/schematics_oneplus_r14_20190612.pdf) (June 2019) and `libraries/FreematicsPlus/FreematicsPlus.h` / `FreematicsPlus.cpp` in [stanleyhuangyc/Freematics](https://github.com/stanleyhuangyc/Freematics). Where they differ, the library wins: the stock firmware built from it runs on these dongles. The r14 board shows an MPU9250 IMU while the product page lists an ICM-20948, so the Model B is a later revision; anything marked "unconfirmed" needs checking on a real unit.
+Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](https://freematics.com/dl/schematics_oneplus_r14_20190612.pdf) (June 2019) and `libraries/FreematicsPlus/FreematicsPlus.h` / `FreematicsPlus.cpp` in [stanleyhuangyc/Freematics](https://github.com/stanleyhuangyc/Freematics). Where they differ, the library wins: the stock firmware built from it runs on these dongles. The r14 board shows an MPU9250 IMU and the product page lists an ICM-20948, but the owner's Model B has an ICM-42627, so it's a later revision; anything marked "unconfirmed" needs checking on a real unit.
 
 ## Pin map
 
@@ -13,7 +13,7 @@ Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](http
 | OBD-II | none | CAN (TJA1050) and K-line are on the STM32 |
 | Battery voltage | GPIO36 (ADC) | 100k/10k divider: × 11, then calibrate. `ATRV` on the co-processor is the alternative |
 | microSD (SPI) | CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23 | |
-| IMU (I2C) | SDA GPIO21, SCL GPIO22 | MPU9250 on r14; ICM-20948 per the product page (unconfirmed) |
+| IMU (I2C) | SDA GPIO21, SCL GPIO22 | ICM-42627 at 0x68 on the owner's Model B (WHO_AM_I register 0x75 reads 0x20, as Freematics' `ICM_42627` driver expects; 2026-11-20). MPU9250 on the r14 schematic, ICM-20948 on the product page: earlier revisions. No interrupt line is known to reach the ESP32; `packages/standby.yaml` reads the latched wake-on-motion flag instead |
 | Buzzer, LED | GPIO25, GPIO4 | The stock firmware drives the buzzer at 2 kHz (LEDC) and beeps 50 ms when it reaches its server over Wi-Fi or once cellular is in service (`telelogger.ino`); the board package does the same, plus 200 ms at start-up |
 | USB serial | CP2102 on UART0 | Flashing and logs |
 | Flash | 16 MB | PSRAM: unconfirmed |

@@ -15,9 +15,12 @@
 # over Wi-Fi: start the car, or unplug it and plug it back in, and it stays
 # awake for standby_after.
 #
-# Waking on motion (the IMU) isn't built yet: the IMU's model and interrupt
-# pin aren't confirmed on the Model B. This package logs what answers on the
-# IMU's I2C bus at start-up, to find out.
+# It also wakes when the car moves while it sleeps (towing, someone getting
+# in): before sleeping it sets the motion sensor's wake-on-motion, which
+# latches a flag the minute check reads, so no interrupt pin is needed. The
+# sensor is found by its ID at run time: the ICM-42627 (WHO_AM_I 0x20, the
+# Model B's, as Freematics' own driver identifies it). Without a known sensor,
+# the device sleeps as before, waking on voltage and heartbeats only.
 #
 # Needs the board package, an uplink package (traccar_uplink with id traccar)
 # and the battery_voltage sensor; the SD card packages are synced before sleep.
@@ -28,6 +31,7 @@ substitutions:
   standby_after: "600"          # s: car off and still this long, then sleep (Traccar's stop record goes out at 180 s)
   standby_check: "60"           # s: deep sleep between voltage checks (each costs about half a second awake)
   standby_heartbeat: "6"        # hours: wake fully to report one record this often; "0": never
+  standby_motion_mg: "150"      # mg: a change this big between samples wakes it (doors, towing); "0": no motion wake
   standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
 
 deep_sleep:
@@ -63,11 +67,19 @@ esphome:
               id(battery_voltage).update();
               float v = id(battery_voltage).state;
               bool car_on = std::isnan(v) || v < ${standby_min_voltage} || v >= ${standby_voltage};
+              // The ICM-42627's wake-on-motion flags (INT_STATUS2, cleared by reading)
+              bool moved = false;
+              uint8_t reg = 0x75, who = 0, status = 0;
+              if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) == i2c::ERROR_OK && who == 0x20) {
+                reg = 0x37;
+                if (id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1) == i2c::ERROR_OK)
+                  moved = (status & 0x07) != 0;
+              }
               checks++;
               const uint32_t check_s = ${standby_check};
               bool heartbeat = ${standby_heartbeat} > 0 &&
                                checks * check_s >= static_cast<uint32_t>(${standby_heartbeat}) * 3600;
-              if (!car_on && !heartbeat) {
+              if (!car_on && !moved && !heartbeat) {
                 // Nothing logged here: the SD card log is written by a task,
                 // and a sleep in the middle of a card write could damage it.
                 // The short wait lets a write already under way finish.
@@ -75,8 +87,9 @@ esphome:
                 esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(check_s) * 1000000ULL);
                 esp_deep_sleep_start();
               }
-              ESP_LOGI("standby", "Woke: %.2f V, %s", v, car_on ? "the car is on" : "heartbeat");
-              id(heartbeat_wake) = !car_on;
+              ESP_LOGI("standby", "Woke: %.2f V, %s", v,
+                       car_on ? "the car is on" : moved ? "the car moved" : "heartbeat");
+              id(heartbeat_wake) = !car_on && !moved;
             }
             checks = 0;
             // Staying awake: release the pins held through sleep.
@@ -84,18 +97,17 @@ esphome:
             gpio_hold_dis(GPIO_NUM_15);
             gpio_hold_dis(GPIO_NUM_25);
             gpio_deep_sleep_hold_dis();
-    # Once the network is up, say what answers on the IMU's bus (once per start).
+    # Say which motion sensor answers (once per start).
     - priority: -200
       then:
         - lambda: |-
-            for (uint8_t addr : {0x68, 0x69}) {
-              uint8_t reg = 0x75, who = 0;  // MPU-9250 / MPU-6500: WHO_AM_I
-              if (id(imu_bus)->write_readv(addr, &reg, 1, &who, 1) == i2c::ERROR_OK)
-                ESP_LOGI("standby", "IMU at 0x%02X: register 0x75 = 0x%02X (0x71: MPU-9250, 0x70: MPU-6500)", addr, who);
-              reg = 0x00;  // ICM-20948: WHO_AM_I in bank 0
-              if (id(imu_bus)->write_readv(addr, &reg, 1, &who, 1) == i2c::ERROR_OK)
-                ESP_LOGI("standby", "IMU at 0x%02X: register 0x00 = 0x%02X (0xEA: ICM-20948)", addr, who);
-            }
+            uint8_t reg = 0x75, who = 0;
+            if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) != i2c::ERROR_OK)
+              ESP_LOGW("standby", "No motion sensor at 0x68: no motion wake");
+            else if (who == 0x20)
+              ESP_LOGI("standby", "Motion sensor: ICM-42627 (motion wake on)");
+            else
+              ESP_LOGW("standby", "Motion sensor with ID 0x%02X isn't supported yet: no motion wake", who);
 
 interval:
   - interval: 10s
@@ -135,6 +147,41 @@ script:
             lambda: return id(coproc_link).in_standby();
           timeout: 5s
       - delay: 1s                 # the ATLP reply
+      - lambda: |-
+          // ICM-42627 wake-on-motion (TDK's ICM-426xx register map): the
+          // accelerometer alone in low-power mode at 50 Hz, a flag latched in
+          // INT_STATUS2 when any axis changes by more than the threshold
+          // between two samples. The minute check reads the flag.
+          if (${standby_motion_mg} <= 0)
+            return;
+          uint8_t reg = 0x75, who = 0;
+          if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) != i2c::ERROR_OK || who != 0x20)
+            return;
+          auto put = [](uint8_t r, uint8_t v) {
+            uint8_t b[2] = {r, v};
+            return id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
+          };
+          const uint8_t threshold = std::min(255, ${standby_motion_mg} * 256 / 1000);  // 1/256 g steps
+          bool ok = put(0x76, 0x00);           // register bank 0
+          ok &= put(0x50, 0x69);               // ACCEL_CONFIG0: +-2 g, 50 Hz
+          ok &= put(0x4E, 0x02);               // PWR_MGMT0: accelerometer low power, gyro off
+          delay(2);
+          ok &= put(0x76, 0x04);               // bank 4: the thresholds
+          ok &= put(0x4A, threshold);          // ACCEL_WOM_X_THR
+          ok &= put(0x4B, threshold);          // ACCEL_WOM_Y_THR
+          ok &= put(0x4C, threshold);          // ACCEL_WOM_Z_THR
+          ok &= put(0x76, 0x00);
+          delay(2);
+          ok &= put(0x66, 0x07);               // INT_SOURCE1: wake-on-motion on all axes
+          delay(50);
+          ok &= put(0x57, 0x05);               // SMD_CONFIG: wake-on-motion, compared with the previous sample
+          reg = 0x37;
+          uint8_t status;
+          id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1);  // clear a flag set while setting up
+          if (ok)
+            ESP_LOGI("standby", "Motion wake set (%d mg)", ${standby_motion_mg});
+          else
+            ESP_LOGW("standby", "Couldn't set the motion sensor up: no motion wake");
       - if:
           condition:
             lambda: return id(modem_synced);
