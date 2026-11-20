@@ -39,7 +39,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 1. **Phases 0 and 1: cellular, GPS to Traccar, Wi-Fi first** (built). Back up the stock flash (`esptool.py --port <port> read_flash 0 0x1000000 stock-car1.bin`). Paste `examples/car-traccar.yaml` into a new device in ESPHome Device Builder, set `traccar_host` and `traccar_device_id` (the device's existing Traccar identifier works), add the secrets, open UDP 5027 on the Traccar server, and install over USB from the browser. On the bench, watch the USB log: PPP up, `ATGPS` fixes, records queued, "Traccar acknowledged". Then drive: the trip in Traccar with sharp corners, a stop record, heartbeats while parked; Wi-Fi at home switching LTE off and back on when leaving. Read the real data use from Hologram after a few days. *Exit:* a week of commutes in one car with every trip complete in Traccar and data use near the estimate in [configurations.md](configurations.md).
 2. **Phase 2: `freematics_link` component.** Moves the co-processor UART, the GNSS parsing and a GNSS time source into C++, adds battery voltage from `ATRV` and the co-processor version from `ATI`. *Exit:* the same behavior without the lambda.
 3. **Phase 3: store and forward on microSD.** The Traccar uplink's in-memory queue (300 fixes) survives coverage gaps but not a reboot or a long outage; move it to the SD card. *Exit:* three forced outages and two reboots with nothing lost.
-4. **Phase 4: vehicle data, passively.** Find out what the co-processor can hear without sending anything (`ATM1`-style monitoring, broadcast CAN frames); report it once per stop. Many cars put a gateway between the OBD port and their internal buses, so there may be little to hear. Active OBD requests only later, as a separate, carefully tested step.
+4. **Phase 4: vehicle data, passively.** Researched in [vehicle-data.md](vehicle-data.md): the co-processor's only listening mode (`ATM1`) isn't documented as silent, and a CAN controller that isn't silent acknowledges frames and, at a wrong bit rate, sends error frames. Nothing is built until Freematics confirms a listen-only mode; both cars' gateways may leave little to hear anyway. Active OBD requests only later, as a separate, carefully tested step.
 
 ## Components (one at a time)
 
@@ -56,6 +56,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 - [ ] Which OBD values matter beyond fuel level?
 - [ ] Does the Traccar server have UDP 5027 (Teltonika) open, and does the device keep its identifier?
 - [ ] Home Assistant configuration only: where the WireGuard server runs, and whether its endpoint works from inside the home network.
+- [ ] Does the co-processor's `ATM1` sniffing run CAN in listen-only (silent) mode, or does it accept `ATCSM1`? Only Freematics can say ([vehicle-data.md](vehicle-data.md)).
 - [ ] What the co-processor can hear passively on each car's OBD port.
 
 ## Log
