@@ -1,9 +1,9 @@
 # Bench test for ESPHome's modem component: the same power-key presses and
 # modem settings as the board package, plus the co-processor link
-# (freematics_link, reading GNSS), and nothing else (no SD card, buzzer or
-# uplink). Without the co-processor link the modem synced and connected
-# (test 3b); the full config never hears the modem, so this checks whether
-# the co-processor link is what gets in the way. The raw probe
+# (freematics_link, reading GNSS), the buzzer and the battery voltage ADC, and
+# nothing else (no SD card or uplink). With the co-processor link alone the
+# modem synced (test 3b); the full config never hears the modem, so this adds
+# the next pieces to find what gets in the way. The raw probe
 # (bench-modem-probe.yaml) showed the module answers on these pins; this tells
 # whether ESPHome's modem component reaches it when nothing else is running. If it does,
 # something else in the full config gets in its way; if it doesn't, the
@@ -27,6 +27,7 @@ esphome:
     - priority: -100
       then:
         - script.execute: modem_power_on
+        - script.execute: { id: beep, ms: 200 }
 
 external_components:
   - source: github://raetha/esphome-freematics@dev
@@ -110,10 +111,26 @@ freematics_link:
   gnss_interval: 2s
   battery_interval: 0s
 
+sensor:
+  # Battery voltage, as in the board package
+  - platform: adc
+    id: battery_voltage
+    name: Battery voltage
+    pin: GPIO36
+    attenuation: 12db
+    update_interval: 30s
+    filters:
+      - multiply: 11.0
+
 output:
   - platform: gpio
     id: modem_pwrkey
     pin: GPIO27
+  # The buzzer, as in the board package
+  - platform: ledc
+    id: buzzer
+    pin: GPIO25
+    frequency: 2000Hz
 
 globals:
   - id: modem_synced
@@ -121,6 +138,15 @@ globals:
     initial_value: "false"
 
 script:
+  - id: beep
+    mode: queued
+    parameters:
+      ms: int
+    then:
+      - output.set_level: { id: buzzer, level: 50% }
+      - delay: !lambda return ms;
+      - output.turn_off: buzzer
+      - delay: 150ms
   # The board package's power-on: enable the modem component, then press the
   # power key (200 ms, as the Freematics library does) until it has synced.
   - id: modem_power_on

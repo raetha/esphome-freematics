@@ -65,13 +65,16 @@ Paste [examples/bench-modem-probe.yaml](https://github.com/raetha/esphome-freema
 
 If nothing answers at all, the next step is hardware: run test 3 again with the dongle in the car (powered from the OBD port), and if still nothing, test 8.
 
-## 3b. ESPHome's modem component, then with the co-processor link
+## 3b. ESPHome's modem component, adding the board's pieces back
 
-Done on 2026-11-20: on its own, ESPHome's modem component synced in 2 s, and once the SIM was powered back up (`AT+CFUN=1`, now in the board package) LTE came up in 9 s. The full config still never hears the modem, so [examples/bench-modem-esphome.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-modem-esphome.yaml) now adds the co-processor link (GNSS) beside it, the likeliest piece to get in the way. Paste it over the config, install, and leave the logs open for two minutes. A PPP connection costs a few hundred bytes.
+Done on 2026-11-20: on its own, ESPHome's modem component synced in 2 s, and once the SIM was powered back up (`AT+CFUN=1`, now in the board package) LTE came up in 9 s. With the co-processor link beside it, it still synced. The full config never hears the modem, so [examples/bench-modem-esphome.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-modem-esphome.yaml) now adds the buzzer and the battery voltage reading too.
 
-**Look for:** "Cellular: PPP up" and "GNSS fix" (both work together: the co-processor isn't it, and the next step adds the buzzer and SD card), or "Modem not responding at 115200 baud" (the co-processor link gets in the way).
+1. Install it, then **unplug the dongle for 10 seconds** and plug it back in (installing over USB restarts the ESP32 but not the modem, which then starts in its last session). Leave the logs open for two minutes.
+2. Install the same config again over Wi-Fi (a restart with the modem still powered, as after any update) and leave the logs open for two minutes.
 
-**Send back:** the whole log. Then paste the normal config back.
+**Look for:** a 200 ms beep at start; "Cellular: PPP up", and whether "Failed to enter PPP. Resetting modem." follows (after step 2 especially); "Modem not responding at 115200 baud" means the buzzer or the voltage reading gets in the way.
+
+**Send back:** both logs. Then paste the normal config back.
 
 ## 4. Does ESPHome's modem component bring LTE up?
 
