@@ -39,6 +39,8 @@ CONFIG_SCHEMA = cv.Schema(
         ): cv.positive_time_period_milliseconds,
     }
 ).extend(cv.COMPONENT_SCHEMA)
+# The writer is a FreeRTOS task of its own.
+CONFIG_SCHEMA = cv.All(CONFIG_SCHEMA, cv.only_on_esp32)
 
 
 async def to_code(config):

@@ -8,16 +8,19 @@ namespace esphome::file_queue {
 
 /// A first-in, first-out queue of fixed-size records in one file, kept across
 /// reboots. The owning component sets the record layout at build time and
-/// uses push(), read() and pop(); each call is a few small file writes.
+/// uses push(), read() and pop(); each call is a few small file writes. Changes
+/// are synced to the card every sync_interval (a sync can take tens of ms).
 class FileQueue final : public Component {
  public:
   void setup() override;
+  void loop() override;
   void dump_config() override;
   // After file systems are mounted (sd_card), before the components using the queue.
   float get_setup_priority() const override { return setup_priority::IO; }
 
   void set_path(const char *path) { this->path_ = path; }
   void set_capacity(uint32_t capacity) { this->capacity_ = capacity; }
+  void set_sync_interval(uint32_t ms) { this->sync_interval_ = ms; }
   void set_record_layout(uint16_t size, uint16_t format) {
     this->record_size_ = size;
     this->record_format_ = format;
@@ -43,6 +46,8 @@ class FileQueue final : public Component {
   ringfile::RingFile file_;
   const char *path_{""};
   uint32_t capacity_{0};
+  uint32_t sync_interval_{30000};
+  uint32_t last_sync_{0};
   uint16_t record_size_{0};
   uint16_t record_format_{0};
 };

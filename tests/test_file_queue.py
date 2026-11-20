@@ -128,3 +128,24 @@ def test_unwritable_path_fails(exe, tmp_path):
         text=True,
     )
     assert result.stdout.splitlines() == ["failed", "push no"]
+
+
+def test_file_made_full_size_and_synced_on_demand(run):
+    # 2 headers of 32 bytes, then 5 slots of 4 bytes
+    assert run("sync") == ["created", "sync ok"]
+    assert run.path.stat().st_size == 64 + 5 * 4
+    assert run("push:1", "sync", "sync") == [
+        "loaded",
+        "push ok",
+        "sync ok (dirty)",
+        "sync ok",
+    ]
+    assert run.path.stat().st_size == 64 + 5 * 4
+
+
+def test_short_file_from_before_is_extended(run):
+    run("push:1")
+    data = run.path.read_bytes()
+    run.path.write_bytes(data[:68])  # an older file: only as long as what was written
+    assert run("size", "read:0:1") == ["loaded", "size 1", "read 1"]
+    assert run.path.stat().st_size == 64 + 5 * 4

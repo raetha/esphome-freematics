@@ -1,11 +1,12 @@
 #include "file_logger.h"
 
+#include <algorithm>
 #include <cinttypes>
+#include <cstring>
 #include <ctime>
 
 #include <unistd.h>
 
-#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include "esphome/components/logger/logger.h"
 
@@ -13,40 +14,31 @@ namespace esphome::file_logger {
 
 static const char *const TAG = "file_logger";
 
-// Each loop() writes at most this much, so a slow card never holds the loop up long.
+// The writer task writes at most this much at a time, outside the lock.
 static constexpr size_t WRITE_CHUNK = 512;
+// How long the writer task sleeps when there's nothing to write.
+static constexpr TickType_t IDLE_WAIT = pdMS_TO_TICKS(200);
 // Before a clock is set, lines carry the uptime instead of the date.
 static constexpr time_t CLOCK_SET = 1700000000;
 
-static uint32_t now_ms() { return App.get_loop_component_start_time(); }
-
 void FileLogger::setup() {
   this->ring_.init(this->buffer_size_);
-  this->open_();
   if (logger::global_logger != nullptr) {
     logger::global_logger->add_log_callback(
         this, [](void *self, uint8_t level, const char *tag, const char *message, size_t message_len) {
           static_cast<FileLogger *>(self)->on_log(level, tag, message, message_len);
         });
   }
-}
-
-bool FileLogger::open_() {
-  this->last_open_try_ = now_ms();
-  this->file_ = fopen(this->path_, "a");
-  if (this->file_ == nullptr) {
-    this->status_set_warning(LOG_STR("Can't open the log file (no card?)"));
-    return false;
-  }
-  this->status_clear_warning();
-  return true;
+  // Below the main loop's priority, on either core: it only drains the buffer.
+  if (xTaskCreate(writer_task_, "file_logger", 4096, this, 1, &this->task_) != pdPASS)
+    this->mark_failed(LOG_STR("Couldn't start the writer task"));
 }
 
 void FileLogger::on_log(uint8_t level, const char *tag, const char *message, size_t message_len) {
   if (level > this->level_)
     return;
   // Called from the main loop only (the logger hands other tasks' lines over to
-  // it), so this needs no lock. It must not log.
+  // it). It must not log.
   char line[320];
   size_t n = 0;
   time_t t = ::time(nullptr);
@@ -59,6 +51,8 @@ void FileLogger::on_log(uint8_t level, const char *tag, const char *message, siz
   }
   n += filelog::clean_line(message, message_len, line + n, sizeof(line) - n - 1);
   line[n++] = '\n';
+
+  LockGuard guard(this->lock_);
   if (this->dropped_ != 0) {
     char note[48];
     int m = snprintf(note, sizeof(note), "[%" PRIu32 " log lines dropped]\n", this->dropped_);
@@ -69,44 +63,81 @@ void FileLogger::on_log(uint8_t level, const char *tag, const char *message, siz
     this->dropped_++;
 }
 
+// The main loop only reports the writer task's state.
 void FileLogger::loop() {
-  uint32_t now = now_ms();
-  if (this->file_ == nullptr) {
-    if (now - this->last_open_try_ < 60000 || !this->open_())
-      return;
+  bool trouble = !this->is_open_.load() || this->failed_.load();
+  if (trouble && !this->warned_) {
+    this->status_set_warning(LOG_STR("Can't write the log file (no card?)"));
+    this->warned_ = true;
+  } else if (!trouble && this->warned_) {
+    this->status_clear_warning();
+    this->warned_ = false;
   }
-  bool due = this->ring_.size() > this->ring_.capacity() / 2 || now - this->last_flush_ >= this->flush_interval_;
-  if (this->ring_.size() != 0 && due) {
-    const char *data;
-    size_t n = this->ring_.peek(&data);
-    if (n > WRITE_CHUNK)
-      n = WRITE_CHUNK;
-    if (fwrite(data, 1, n, this->file_) != n) {
-      fclose(this->file_);
-      this->file_ = nullptr;
-      this->status_set_warning(LOG_STR("Writing the log file failed"));
-      return;
+}
+
+void FileLogger::writer_task_(void *self) { static_cast<FileLogger *>(self)->write_loop_(); }
+
+bool FileLogger::open_() {
+  this->file_ = fopen(this->path_, "a");
+  this->is_open_.store(this->file_ != nullptr);
+  return this->file_ != nullptr;
+}
+
+void FileLogger::write_loop_() {
+  char chunk[WRITE_CHUNK];
+  TickType_t last_open_try = 0;
+  TickType_t last_sync = xTaskGetTickCount();
+  bool unsynced = false;
+  for (;;) {
+    TickType_t now = xTaskGetTickCount();
+    if (this->file_ == nullptr) {
+      // No card, or it failed: try again every minute.
+      if ((last_open_try != 0 && now - last_open_try < pdMS_TO_TICKS(60000)) || !this->open_()) {
+        last_open_try = now == 0 ? 1 : now;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        continue;
+      }
+      this->failed_.store(false);
     }
-    this->ring_.consume(n);
-    this->written_ += n;
-    this->unsynced_ = true;
-    return;  // the next chunk on the next loop
-  }
-  if (this->unsynced_ && this->ring_.size() == 0) {
-    // Everything waiting is written: make it survive a power cut.
-    fflush(this->file_);
-    fsync(fileno(this->file_));
-    this->unsynced_ = false;
-    this->last_flush_ = now;
-    if (ftell(this->file_) >= static_cast<long>(this->max_size_))  // NOLINT(google-runtime-int)
-      this->rotate_();
+
+    size_t n = 0;
+    {
+      LockGuard guard(this->lock_);
+      const char *data;
+      n = std::min(this->ring_.peek(&data), WRITE_CHUNK);
+      memcpy(chunk, data, n);
+      this->ring_.consume(n);
+    }
+    if (n != 0) {
+      if (fwrite(chunk, 1, n, this->file_) != n) {
+        fclose(this->file_);
+        this->file_ = nullptr;
+        this->is_open_.store(false);
+        this->failed_.store(true);
+        continue;
+      }
+      this->written_.fetch_add(n);
+      unsynced = true;
+      continue;  // more may be waiting
+    }
+
+    if (unsynced && now - last_sync >= pdMS_TO_TICKS(this->flush_interval_)) {
+      // Everything waiting is written: make it survive a power cut.
+      fflush(this->file_);
+      fsync(fileno(this->file_));
+      unsynced = false;
+      last_sync = now;
+      if (ftell(this->file_) >= static_cast<long>(this->max_size_))  // NOLINT(google-runtime-int)
+        this->rotate_();
+    }
+    vTaskDelay(IDLE_WAIT);
   }
 }
 
 void FileLogger::rotate_() {
   fclose(this->file_);
   this->file_ = nullptr;
-  char old[64];
+  char old[72];
   snprintf(old, sizeof(old), "%s.1", this->path_);
   remove(old);
   rename(this->path_, old);
@@ -114,13 +145,18 @@ void FileLogger::rotate_() {
 }
 
 void FileLogger::dump_config() {
+  uint32_t dropped;
+  {
+    LockGuard guard(this->lock_);
+    dropped = this->dropped_;
+  }
   ESP_LOGCONFIG(TAG,
                 "File logger:\n"
                 "  Path: %s (%s)\n"
                 "  Max size: %" PRIu32 " bytes, then %s.1\n"
                 "  Written since boot: %" PRIu32 " bytes; dropped lines waiting: %" PRIu32,
-                this->path_, this->file_ != nullptr ? "open" : "not open", this->max_size_, this->path_, this->written_,
-                this->dropped_);
+                this->path_, this->is_open_.load() ? "open" : "not open", this->max_size_, this->path_,
+                this->written_.load(), dropped);
 }
 
 }  // namespace esphome::file_logger

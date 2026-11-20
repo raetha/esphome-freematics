@@ -61,6 +61,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: USB install from a computer with every SD package on: the record file was created and records queued "on file"; ESPHome warned that `file_logger` (52 to 88 ms) and, through the record queue, `freematics_link` (93 ms) blocked the loop, so the log writer now runs in a task of its own and the record file is made full size at creation and synced every 30 s instead of on every change. On the computer's USB port Wi-Fi again failed with "Auth Expired" right after a PWRKEY press, which fits too little power for the cellular module to start; the modem tests need the charger or the car.
+
 - 2026-11-20: Bench, 0.1.0-dev.9 with `sd-card.yaml` and `sd-logs.yaml`: the card mounted (SD04G, 3.7 GB, 20 MHz) and the log file grew about 300 bytes a second, most of it the configuration dump repeated on every log-viewer connection. Free heap 178 KB. Traccar still unanswered (test 1 pending).
 
 - 2026-11-20: Overnight: the encoder's packets checked against a real Traccar 6.17.0 (acknowledged, decoded right), so the missing acknowledgements are on the network path; `scripts/traccar_check.py` checks a server from anywhere. Bench switches: `lte_on_wifi`, `modem_pwrkey_press`, `modem_pwrkey_tries`. SD storage rebuilt on `dev` as opt-in packages, plus `file_logger` for logs on the card. The bench test plan is `docs/bench-tests.md`.
