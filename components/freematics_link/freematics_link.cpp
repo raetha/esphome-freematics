@@ -1,7 +1,9 @@
 #include "freematics_link.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
@@ -27,6 +29,9 @@ static const char *command_text(Command cmd) {
       return "";
   }
 }
+
+// For logs: the command without its "\r".
+static int command_len(Command cmd) { return std::max<int>(0, static_cast<int>(strlen(command_text(cmd))) - 1); }
 
 // How long to wait for a reply: the library's own timeouts, with room to spare.
 static uint32_t command_timeout(Command cmd) { return cmd == Command::GNSS_READ ? 300 : 1000; }
@@ -68,6 +73,7 @@ void FreematicsLink::loop() {
     uint8_t c;
     if (!this->read_byte(&c))
       break;
+    this->rx_total_++;
     if (this->rx_len_ < sizeof(this->rx_) - 1)
       this->rx_[this->rx_len_++] = static_cast<char>(c);
     this->rx_[this->rx_len_] = '\0';
@@ -77,9 +83,10 @@ void FreematicsLink::loop() {
       Command cmd = this->pending_;
       this->pending_ = Command::NONE;
       if (cmd == Command::GNSS_READ) {
+        this->gnss_misses_ = 0;
         ESP_LOGV(TAG, "GNSS: %s", this->rx_);  // every couple of seconds: verbose only
       } else {
-        ESP_LOGD(TAG, "Reply to %.*s: %s", 8, command_text(cmd), this->rx_);
+        ESP_LOGD(TAG, "Reply to %.*s: %s", command_len(cmd), command_text(cmd), this->rx_);
       }
       this->handle_reply_(cmd, this->rx_);
       this->rx_len_ = 0;
@@ -89,7 +96,7 @@ void FreematicsLink::loop() {
   if (this->pending_ != Command::NONE) {
     if (now - this->sent_at_ < command_timeout(this->pending_))
       return;
-    ESP_LOGV(TAG, "No reply to %s", command_text(this->pending_));
+    this->log_no_reply_();
     this->pending_ = Command::NONE;
     this->rx_len_ = 0;
   }
@@ -129,6 +136,26 @@ void FreematicsLink::loop() {
   if (this->battery_interval_ != 0 && now - this->last_battery_ >= this->battery_interval_) {
     this->last_battery_ = now;
     this->send_(Command::BATTERY);
+  }
+}
+
+// A missing reply says a lot on the bench: whether anything at all came back
+// (nothing: power, reset or wiring; bytes without the "\r>" prompt: the wrong
+// baud rate or a different firmware). GNSS reads are polled, so only every
+// 30th miss in a row is logged.
+void FreematicsLink::log_no_reply_() {
+  if (this->pending_ == Command::GNSS_READ && this->gnss_misses_++ % 30 != 0)
+    return;
+  char hex[3 * 16 + 1] = {};
+  size_t n = std::min<size_t>(this->rx_len_, 16);
+  for (size_t i = 0; i < n; i++)
+    snprintf(hex + 3 * i, 4, "%02X ", static_cast<uint8_t>(this->rx_[i]));
+  if (this->rx_len_ == 0) {
+    ESP_LOGW(TAG, "No reply to %.*s (%" PRIu32 " bytes received since boot)", command_len(this->pending_),
+             command_text(this->pending_), this->rx_total_);
+  } else {
+    ESP_LOGW(TAG, "Incomplete reply to %.*s: %u bytes, starting %s", command_len(this->pending_),
+             command_text(this->pending_), (unsigned) this->rx_len_, hex);
   }
 }
 

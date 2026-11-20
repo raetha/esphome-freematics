@@ -62,6 +62,7 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
 
  protected:
   void send_(Command cmd);
+  void log_no_reply_();
   void handle_reply_(Command cmd, const char *reply);
   void handle_fix_(const char *reply);
 
@@ -93,6 +94,9 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   uint32_t last_gnss_{0};
   uint32_t last_battery_{0};
   uint8_t identify_tries_{0};
+  // Diagnostics: every byte received since boot, and GNSS reads in a row with no reply.
+  uint32_t rx_total_{0};
+  uint16_t gnss_misses_{0};
 
   char rx_[256]{};
   size_t rx_len_{0};
