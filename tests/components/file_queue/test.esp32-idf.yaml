@@ -1,0 +1,48 @@
+# ESPHome-style component test: file_queue on an SD card, its owner here being a
+# lambda that declares the record layout. CI builds it alongside the examples.
+esphome:
+  name: test-file-queue
+  on_boot:
+    priority: 950  # before file_queue's setup: what an owning component does in to_code
+    then:
+      - lambda: id(store).set_record_layout(sizeof(uint32_t), 1);
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sd_card, file_queue]
+
+spi:
+  id: sd_bus
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sd_card:
+  spi_id: sd_bus
+  cs_pin: GPIO5
+
+file_queue:
+  id: store
+  path: /sdcard/test.bin
+  capacity: 100
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          static uint32_t n = 0;
+          n++;
+          id(store).push(&n);
+          uint32_t first = 0;
+          if (id(store).size() > 10 && id(store).read(0, 1, &first))
+            id(store).pop(1);
+          ESP_LOGD("test", "held %u, oldest %u", (unsigned) id(store).size(), (unsigned) first);

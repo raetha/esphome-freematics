@@ -145,6 +145,21 @@ sensor:
     filters:
       - multiply: 11.0   # 100k/10k divider; calibrate against a meter
 
+# ---------- microSD (SPI) ----------
+# Mounted at /sdcard when a FAT-formatted card is in the slot; without one the
+# device carries on and keeps records in memory only. The device config loads
+# the component (external_components: components: [sd_card, ...]).
+spi:
+  id: sd_bus
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sd_card:
+  id: sd
+  spi_id: sd_bus
+  cs_pin: GPIO5
+
 # ---------- Co-processor link (STM32F103: OBD and the internal GNSS) ----------
 # Only reads: ATGPS for the GNSS and, from buttons, ATI and ATRV, which the
 # co-processor answers itself. Nothing here sends to the vehicle bus.

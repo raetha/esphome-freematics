@@ -27,7 +27,7 @@ packages:
 external_components:
   - source: github://raetha/esphome-freematics@dev
     refresh: 0s
-    components: [traccar_uplink]
+    components: [traccar_uplink, file_queue, sd_card]
 
 wifi:
   networks:

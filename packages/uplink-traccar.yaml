@@ -17,9 +17,18 @@ substitutions:
   traccar_turn_angle: "30"            # degrees: a turn this sharp records a fix early
   traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
   traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
+  traccar_stored_records: "50000"     # records kept on the SD card until Traccar has them (about 28 bytes each)
+
+# Every record stays on the SD card until Traccar acknowledges it, so a reboot or
+# a long time without coverage loses nothing. Without a card, memory holds 300.
+file_queue:
+  id: traccar_store
+  path: /sdcard/traccar.bin
+  capacity: ${traccar_stored_records}
 
 traccar_uplink:
   id: traccar
+  file_queue_id: traccar_store
   host: ${traccar_host}
   port: ${traccar_port}
   device_id: ${traccar_device_id}

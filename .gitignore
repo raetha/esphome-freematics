@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 build/
+
+# Written by local esphome compiles of the component tests
+tests/components/*/.gitignore
+tests/components/*/.esphome/

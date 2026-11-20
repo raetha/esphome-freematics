@@ -47,7 +47,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 | --- | --- | --- |
 | `traccar_uplink` | Tracking filter (moving, turns, start, stop, heartbeat), in-memory queue, Teltonika GH3000 over UDP with acknowledgements, motion triggers | Built (phase 1) |
 | `freematics_link` | Owns the co-processor UART; GNSS fixes and time; battery voltage; later passive vehicle data | Phase 2 |
-| SD-backed queue | Records survive reboots and long outages | Phase 3 |
+| `sd_card`, `file_queue` | Generic: mount a microSD card over an ESPHome SPI bus; a first-in, first-out file of fixed-size records that survives resets. The Traccar uplink keeps every unacknowledged record in one (50,000 by default) and memory holds the next 300 to send | Built on `try/sd-storage`, not merged: waits for phase 1 on hardware |
 
 ## Open questions
 
@@ -58,6 +58,9 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 - [ ] What the co-processor can hear passively on each car's OBD port.
 
 ## Log
+
+- 2026-11-19: Built phase 3 on `try/sd-storage`: generic `sd_card` and `file_queue` components (written so they could be offered to ESPHome later; ESPHome has `esp32.require_fatfs()` for this, and a much larger `storage` proposal was closed in 2026) and the Traccar uplink's backlog on top of them, with host tests over the real file code (reopen, wrap-around, a torn header, a failing card). Local compiles work in sessions now.
+- 2026-11-19: First bench test of 0.1.0-dev.3 on USB power: Wi-Fi failed with "Auth Expired" on every access point, the modem didn't answer its first two PWRKEY presses, and the co-processor answered no `ATGPS` in the 20 seconds logged.
 
 - 2026-11-19: Adopted ESPHome's component rules as a checklist (no quality scale exists); `traccar_uplink` now allocates its queue and buffers once at startup, uses loop time, and has a component test config; clang-format and clang-tidy in CI.
 - 2026-11-19: Repository public; CI automatic again. Examples fetch everything from GitHub so they can be pasted into ESPHome Device Builder; CI builds them from the checkout (`scripts/localize.py`).

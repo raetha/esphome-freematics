@@ -270,3 +270,95 @@ def test_queue_erase_keeps_the_rest_in_order(cli):
         "2,4",
         "-",
     ]
+
+
+# The backlog: records in memory, and with a store (a ring file here) every
+# waiting record on file with memory holding the oldest of them.
+
+
+@pytest.fixture(scope="module")
+def backlog_exe(tmp_path_factory):
+    exe = tmp_path_factory.mktemp("backlog") / "backlog_cli"
+    subprocess.run(
+        [
+            CXX,
+            "-std=c++17",
+            "-Wall",
+            "-Werror",
+            "-I",
+            str(COMPONENT),
+            "-I",
+            str(ROOT / "components" / "file_queue"),
+            str(ROOT / "tests" / "cpp" / "backlog_cli.cpp"),
+            "-o",
+            str(exe),
+        ],
+        check=True,
+    )
+    return exe
+
+
+@pytest.fixture
+def backlog(backlog_exe, tmp_path):
+    def run(*ops, memory=3, store=True, capacity=6):
+        path = str(tmp_path / "q.bin") if store else "-"
+        result = subprocess.run(
+            [str(backlog_exe), str(memory), path, str(capacity), *ops],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.splitlines()
+
+    return run
+
+
+def test_backlog_memory_only_drops_oldest_not_in_flight(backlog):
+    adds = [f"add:{t}:0" for t in (1, 2, 3)]
+    assert backlog(*adds, "add:4:1", "show", store=False) == [
+        "added",
+        "added",
+        "added",
+        "dropped oldest",
+        "size 3 memory 1 3 4",
+    ]
+    assert backlog(*adds, "add:4:3", "show", store=False)[-2:] == [
+        "dropped",
+        "size 3 memory 1 2 3",
+    ]
+
+
+def test_backlog_spills_to_the_store_and_refills(backlog):
+    adds = [f"add:{t}:0" for t in range(1, 6)]
+    assert backlog(*adds, "show", "ack:2", "show", "ack:3", "show")[5:] == [
+        "size 5 memory 1 2 3",
+        "size 3 memory 3 4 5",
+        "size 0 memory",
+    ]
+
+
+def test_backlog_survives_a_restart(backlog):
+    adds = [f"add:{t}:0" for t in range(1, 6)]
+    assert backlog(*adds, "ack:1", "restart", "show")[-1] == "size 4 memory 2 3 4"
+    assert backlog("show", "ack:3", "show") == [
+        "size 4 memory 2 3 4",
+        "size 1 memory 5",
+    ]
+
+
+def test_backlog_full_store(backlog):
+    adds = [f"add:{t}:0" for t in range(1, 7)]
+    assert backlog(*adds, "add:7:0", "show")[-2:] == [
+        "dropped oldest",
+        "size 6 memory 2 3 4",
+    ]
+    assert backlog("add:8:2", "show")[-2:] == ["dropped", "size 6 memory 2 3 4"]
+
+
+def test_backlog_carries_on_in_memory_when_the_store_fails(backlog):
+    adds = [f"add:{t}:0" for t in range(1, 5)]
+    assert backlog(*adds, "fail", "add:5:0", "show", "ack:1", "show")[-3:] == [
+        "dropped oldest",
+        "size 3 memory 2 3 5",
+        "size 2 memory 3 5",
+    ]

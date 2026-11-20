@@ -6,13 +6,13 @@ Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](http
 
 | Function | ESP32 pins | Notes |
 | --- | --- | --- |
-| Cellular module (xBee socket) | RX GPIO35, TX GPIO2, PWRKEY GPIO27 | 115200 baud, no RTS/CTS. The library pulses PWRKEY high for 200 ms (`xbTogglePower`). GPIO2 is a strapping pin |
+| Cellular module (xBee socket) | RX GPIO35, TX GPIO2, PWRKEY GPIO27 | 115200 baud, no RTS/CTS. The library pulses PWRKEY high for 200 ms (`xbTogglePower`) and waits 2 s for an answer, up to 30 times (`CellSIMCOM::begin`). With co-processor version 13 the library uses RX GPIO32, TX GPIO33 instead. GPIO2 is a strapping pin |
 | Co-processor link (STM32F103) | RX GPIO13, TX GPIO14, reset GPIO15 (active low) | 115200 baud (`LINK_UART_BAUDRATE`), ELM327-style AT commands |
 | Internal GNSS | none | Wired to the STM32's PB10/PB11; read through the co-processor (below) |
 | External GNSS (optional M10) | RX GPIO32 or 34, TX GPIO33 or 26, power GPIO15 or 12 | Which pair depends on the co-processor version (`gpsBeginExt`). GPIO12 is the flash-voltage strapping pin: leave it alone unless an external receiver is fitted |
 | OBD-II | none | CAN (TJA1050) and K-line are on the STM32 |
-| Battery voltage | GPIO36 (ADC) | 100k/10k divider: × 11, then calibrate. `ATRV` on the co-processor is the alternative |
-| microSD (SPI) | CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23 | |
+| Battery voltage | GPIO36 (ADC) | The telelogger reads it as `analogRead(A0) * 45 / 4095` for co-processor versions above 12, about × 13.6 of the pin voltage, not the × 11 the r14 divider suggests: calibrate. `ATRV` on the co-processor is the alternative (the telelogger uses it for versions 12 and below) |
+| microSD (SPI) | CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23 | FAT; `sd_card` mounts it at `/sdcard` |
 | IMU (I2C) | SDA GPIO21, SCL GPIO22 | MPU9250 on r14; ICM-20948 per the product page (unconfirmed) |
 | Buzzer, LED | GPIO25, GPIO4 | |
 | USB serial | CP2102 on UART0 | Flashing and logs |

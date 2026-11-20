@@ -18,7 +18,7 @@ external_components:
   - source:
       type: local
       path: ../../../components
-    components: [traccar_uplink]
+    components: [traccar_uplink, file_queue, sd_card]
 
 time:
   - platform: sntp
@@ -29,8 +29,24 @@ sensor:
     id: battery
     lambda: return 12.6;
 
+spi:
+  id: sd_bus
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sd_card:
+  spi_id: sd_bus
+  cs_pin: GPIO5
+
+file_queue:
+  id: fix_store
+  path: /sdcard/traccar.bin
+  capacity: 5000
+
 traccar_uplink:
   id: traccar
+  file_queue_id: fix_store
   host: traccar.example.com
   port: 5027
   device_id: test-device

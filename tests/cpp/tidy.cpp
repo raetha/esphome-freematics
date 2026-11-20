@@ -4,3 +4,5 @@
 #include "record_queue.h"
 #include "teltonika.h"
 #include "tracker.h"
+#include "ring_file.h"
+#include "backlog.h"

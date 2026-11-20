@@ -22,6 +22,11 @@ packages:
       - packages/wifi-first.yaml
       - packages/uplink-home-assistant.yaml
 
+external_components:
+  - source: github://raetha/esphome-freematics@dev
+    refresh: 0s
+    components: [sd_card]
+
 wifi:
   networks:
     - ssid: !secret wifi_ssid

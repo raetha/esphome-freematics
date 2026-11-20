@@ -26,11 +26,16 @@ CONF_MIN_TURN_INTERVAL = "min_turn_interval"
 CONF_HEARTBEAT_INTERVAL = "heartbeat_interval"
 CONF_ON_MOTION_START = "on_motion_start"
 CONF_ON_MOTION_STOP = "on_motion_stop"
+CONF_FILE_QUEUE_ID = "file_queue_id"
+
+# Bump when trackcodec::Record's layout changes, so stored files start afresh.
+RECORD_FORMAT = 1
 
 traccar_uplink_ns = cg.esphome_ns.namespace("traccar_uplink")
 TraccarUplink = traccar_uplink_ns.class_("TraccarUplink", cg.Component)
 FlushAction = traccar_uplink_ns.class_("FlushAction", automation.Action)
 TrackerConfig = cg.global_ns.namespace("trackcodec").struct("TrackerConfig")
+FileQueue = cg.esphome_ns.namespace("file_queue").class_("FileQueue", cg.Component)
 
 
 def _device_id(value):
@@ -63,6 +68,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_BATCH_MAX, default=40): cv.int_range(min=1, max=40),
             cv.Optional(CONF_BATTERY_VOLTAGE): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_TIME_ID): cv.use_id(time.RealTimeClock),
+            cv.Optional(CONF_FILE_QUEUE_ID): cv.use_id(FileQueue),
             cv.Optional(CONF_MOVING_SPEED, default=6.0): cv.float_range(min=1, max=50),
             cv.Optional(CONF_STOP_DELAY, default="180s"): _seconds,
             cv.Optional(CONF_MOVING_INTERVAL, default="10s"): _seconds,
@@ -104,6 +110,11 @@ async def to_code(config):
         )
     if CONF_TIME_ID in config:
         cg.add(var.set_time(await cg.get_variable(config[CONF_TIME_ID])))
+    if CONF_FILE_QUEUE_ID in config:
+        queue = await cg.get_variable(config[CONF_FILE_QUEUE_ID])
+        record_size = cg.RawExpression("sizeof(::trackcodec::Record)")
+        cg.add(queue.set_record_layout(record_size, RECORD_FORMAT))
+        cg.add(var.set_file_queue(queue))
     for conf in config.get(CONF_ON_MOTION_START, []):
         await automation.build_automation(var.get_motion_start_trigger(), [], conf)
     for conf in config.get(CONF_ON_MOTION_STOP, []):

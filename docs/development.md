@@ -23,7 +23,7 @@ pip install -r requirements-dev.txt
 pytest tests/
 ruff check scripts/ tests/ components/ && ruff format --check scripts/ tests/ components/
 clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cpp' 'tests/cpp/*.cpp')
-clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink
+clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 $(printf -- '-I %s ' components/*/)
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
 python3 scripts/localize.py examples/car-traccar.yaml build/local   # the example, using this checkout
@@ -32,7 +32,7 @@ esphome config build/local/car-traccar.yaml
 esphome compile build/local/car-traccar.yaml              # first run downloads ESP-IDF (~1 GB)
 ```
 
-Claude sessions can run everything but the compile (the session proxy blocks dl.espressif.com); CI compiles when it's run. Lambdas are C++, so YAML with lambdas isn't done until a compile passes.
+Claude sessions can compile too (the session proxy lets dl.espressif.com, components.espressif.com and PlatformIO's registry through); CI compiles on every push. Lambdas are C++, so YAML with lambdas isn't done until a compile passes.
 
 Testing on hardware: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
 

@@ -16,6 +16,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - Nothing is sent to the vehicle bus: only commands the co-processor answers itself.
 - The example configs are complete on their own: paste one into ESPHome Device Builder, set a few substitutions and secrets, and build; the packages and the component come from GitHub.
 - The Traccar server settings the configuration needs (docs/configurations.md).
+- microSD storage for the Traccar configuration: every record stays on the card until Traccar acknowledges it (up to 50,000, about 140 hours of driving), so a restart or a long time without coverage loses nothing. Without a card the device keeps 300 in memory as before. The `sd_card` and `file_queue` components behind it work on any ESP32 board.
 
 ### Internal
 

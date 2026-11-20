@@ -13,8 +13,11 @@
 #ifdef USE_TIME
 #include "esphome/components/time/real_time_clock.h"
 #endif
+#ifdef USE_FILE_QUEUE
+#include "esphome/components/file_queue/file_queue.h"
+#endif
 
-#include "record_queue.h"
+#include "backlog.h"
 #include "teltonika.h"
 #include "tracker.h"
 
@@ -22,7 +25,11 @@ namespace esphome::traccar_uplink {
 
 using ::trackcodec::Decision;
 using ::trackcodec::Record;
-using ::trackcodec::RecordQueue;
+#ifdef USE_FILE_QUEUE
+using Store = file_queue::FileQueue;
+#else
+using Store = ::trackcodec::NoStore;
+#endif
 using ::trackcodec::Tracker;
 using ::trackcodec::TrackerConfig;
 
@@ -47,6 +54,11 @@ class TraccarUplink final : public Component {
 #ifdef USE_TIME
   void set_time(time::RealTimeClock *t) { this->time_ = t; }
 #endif
+#ifdef USE_FILE_QUEUE
+  /// Keep every record in this queue (an SD card file) until Traccar
+  /// acknowledges it; memory then holds only the oldest max_queue of them.
+  void set_file_queue(file_queue::FileQueue *q) { this->store_ = q; }
+#endif
 
   /// A valid GNSS fix: date ddmmyy and time hhmmsscc (UTC) as the co-processor reports them.
   void add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh, float course_deg,
@@ -55,7 +67,7 @@ class TraccarUplink final : public Component {
   void flush() { this->flush_requested_ = true; }
 
   bool is_moving() const { return this->tracker_.moving(); }
-  size_t queue_size() const { return this->queue_.size(); }
+  size_t queue_size() const { return this->backlog_.size(); }
   uint32_t records_sent() const { return this->records_sent_; }
   uint32_t bytes_sent() const { return this->bytes_sent_; }
 
@@ -82,9 +94,10 @@ class TraccarUplink final : public Component {
 #ifdef USE_TIME
   time::RealTimeClock *time_{nullptr};
 #endif
+  Store *store_{nullptr};
 
   Tracker tracker_;
-  RecordQueue queue_;
+  ::trackcodec::Backlog<Store> backlog_;
   std::unique_ptr<Record[]> batch_;  // NOLINT(cppcoreguidelines-avoid-c-arrays)
   uint8_t buf_[1024];
   socket::Ipv4Resolve resolver_;

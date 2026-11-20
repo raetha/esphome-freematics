@@ -17,7 +17,7 @@ ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogge
 ## Validate
 
 - `pip install -r requirements-dev.txt`, then `pytest tests/` (builds the component's plain C++ parts with g++), `ruff check scripts/ tests/ components/`, `ruff format --check scripts/ tests/ components/`, clang-format and clang-tidy as `docs/development.md` → "Setup and testing" shows, `python3 scripts/markdown.py --check $(git ls-files '*.md')` and `python3 scripts/release.py check`.
-- `python3 scripts/localize.py examples/<name>.yaml build/local`, `cp examples/secrets.example.yaml build/local/secrets.yaml`, then `esphome config build/local/<name>.yaml` for each example. Sessions can't compile: the ESP-IDF install needs dl.espressif.com, which the session proxy blocks; CI compiles.
+- `python3 scripts/localize.py examples/<name>.yaml build/local`, `cp examples/secrets.example.yaml build/local/secrets.yaml`, then `esphome config build/local/<name>.yaml` and `esphome compile` for each example and `tests/components/*/test.*.yaml` (the owner allowed Espressif's and PlatformIO's download hosts in the session proxy; the first compile takes a few minutes).
 - Lambdas and C++ only prove themselves at compile time: put them on a `try/` branch with a pull request and let CI compile before merging.
 
 ## Hard-won facts (details in docs/hardware.md and docs/networking.md)
