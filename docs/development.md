@@ -24,7 +24,7 @@ pip install -r requirements-dev.txt
 pytest tests/
 ruff check scripts/ tests/ components/ && ruff format --check scripts/ tests/ components/
 clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cpp' 'tests/cpp/*.cpp')
-clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink -I components/freematics_link
+clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 $(printf -- '-I %s ' components/*/)
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
 python3 scripts/localize.py examples/car-traccar.yaml build/local   # the example, using this checkout
@@ -37,7 +37,7 @@ Claude sessions can compile too: the owner let Espressif's and PlatformIO's down
 
 Against a real Traccar server: download Traccar's platform-independent release (`traccar-other-<version>.zip` from its GitHub releases; it needs Java 17 or later), set `protocols.enable` to `teltonika` in `conf/traccar.xml`, start it with `java -jar tracker-server.jar conf/traccar.xml`, create a user and a device with the identifier `test` (`POST /api/users`, then `POST /api/devices` on port 8082), then run `TRACCAR_UDP=127.0.0.1:5027 pytest tests/test_traccar_server.py`.
 
-Testing on hardware: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
+Testing on hardware follows [bench-tests.md](bench-tests.md), one thing per test: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
 
 ## Component checklist
 

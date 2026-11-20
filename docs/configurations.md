@@ -10,13 +10,25 @@ The board package (`packages/freematics-oneplus-b.yaml`) is the same for every d
 | Driving, one hour (defaults) | about 12 KB | about 200 KB |
 | Parked away from Wi-Fi | about 0.4 KB an hour (a heartbeat every 15 min) | about 55 KB an hour while connected over LTE (no parked mode yet) |
 | A workday: one hour of driving, 8 hours parked at work, the rest at home on Wi-Fi | about 15 KB | about 650 KB |
-| Offline (no signal) | Fixes queue in memory (300 by default, about 50 minutes of driving) and go out when Traccar answers; lost on reboot | Nothing kept: HA shows unavailable |
+| Offline (no signal) | Fixes queue in memory (300 by default, about 50 minutes of driving) and go out when Traccar answers; lost on reboot unless `sd-traccar.yaml` keeps them on the SD card (50,000) | Nothing kept: HA shows unavailable |
 | Track timestamps | Each fix carries its GNSS time | HA's arrival time |
 | In Home Assistant | Through Traccar (Traccar Server integration): device tracker and attributes | Native entities; a template device tracker over latitude/longitude ([home-assistant.md](home-assistant.md)) |
 | Needs at home | Traccar reachable on UDP 5027 | Home Assistant 2026.10+, a WireGuard server |
-| Diagnostics | USB log only; battery voltage with each start, stop and heartbeat | Cellular signal, heap, uptime, reset reason, battery voltage, probe buttons |
+| Diagnostics | Logs in Device Builder over Wi-Fi, or on the SD card (`sd-logs.yaml`); battery voltage with each start, stop and heartbeat | Cellular signal, heap, uptime, reset reason, battery voltage, probe buttons |
 
 The stock telelogger used a few hundred KB on a busy day and 10 to 15 KB on a typical one, logging GPS only, so the Traccar configuration is in the same range with every fix delivered and acknowledged.
+
+The Traccar figures come from a simulation through the real tracking filter and encoder (`tests/test_simulation.py`; IP and UDP headers and Traccar's answers included): an hour of town and highway driving makes about 380 records in 63 packets, 11.5 KB; 8 hours parked on LTE makes 32 heartbeats, 3.3 KB. Most of a packet's cost is fixed (about 80 bytes of headers and answer), so fewer, fuller packets save the most:
+
+| Setting (substitution) | Driving, one hour | Parked on LTE, 8 hours |
+| --- | --- | --- |
+| Defaults: send every 60 s, heartbeat every 15 min | 11.5 KB | 3.3 KB |
+| `traccar_send_interval: 120s` | 9.0 KB | |
+| `traccar_send_interval: 300s` | 7.6 KB | |
+| `traccar_heartbeat_interval: 30min` | | 1.6 KB |
+| `traccar_heartbeat_interval: 1h` | | 0.8 KB |
+
+A longer send interval delays what Traccar shows by that much while driving; nothing is lost, and stops and heartbeats still go out at once.
 
 Both use `packages/wifi-first.yaml`: on a known Wi-Fi network LTE is switched off and everything goes over Wi-Fi.
 

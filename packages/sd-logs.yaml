@@ -1,0 +1,15 @@
+# The device's log, written to the SD card: /sdcard/esphome.log, then
+# esphome.log.1 when it reaches sd_log_max_size. For finding out what happened
+# away from Wi-Fi (on a drive, over LTE): take the card out and read the file.
+#
+# Needs sd-card.yaml; the device config loads the component
+# (external_components: components: [file_logger, ...]).
+
+substitutions:
+  sd_log_level: DEBUG
+  sd_log_max_size: 1MB      # two files at most: 2 MB
+
+file_logger:
+  path: /sdcard/esphome.log
+  level: ${sd_log_level}
+  max_size: ${sd_log_max_size}

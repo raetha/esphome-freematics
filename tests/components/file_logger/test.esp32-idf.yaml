@@ -1,0 +1,35 @@
+# ESPHome-style component test: every option of file_logger, writing to an SD
+# card. CI builds it alongside the examples.
+esphome:
+  name: test-file-logger
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sd_card, file_logger]
+
+spi:
+  id: sd_bus
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sd_card:
+  spi_id: sd_bus
+  cs_pin: GPIO5
+
+file_logger:
+  path: /sdcard/test.log
+  level: INFO
+  max_size: 64kB
+  buffer_size: 2048
+  flush_interval: 5s

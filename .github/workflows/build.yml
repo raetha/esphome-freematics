@@ -84,7 +84,7 @@ jobs:
 
       # The ESPHome-facing files are checked by the firmware compile; the plain C++ headers here.
       - name: clang-tidy on the plain C++ headers
-        run: clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink -I components/freematics_link
+        run: clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 $(printf -- '-I %s ' components/*/)
 
   tests:
     name: Script and workflow tests
@@ -143,7 +143,7 @@ jobs:
         run: |
           for f in examples/*.yaml; do
             case "$f" in */secrets*) continue ;; esac
-            python3 scripts/localize.py "$f" build/local
+            python3 scripts/localize.py --optional "$f" build/local
           done
           cp examples/secrets.example.yaml build/local/secrets.yaml
 

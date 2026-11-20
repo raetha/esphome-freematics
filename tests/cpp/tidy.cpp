@@ -5,3 +5,6 @@
 #include "teltonika.h"
 #include "tracker.h"
 #include "link_parse.h"
+#include "backlog.h"
+#include "ring_file.h"
+#include "log_line.h"

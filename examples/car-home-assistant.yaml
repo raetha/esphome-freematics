@@ -21,11 +21,14 @@ packages:
       - packages/freematics-oneplus-b.yaml
       - packages/wifi-first.yaml
       - packages/uplink-home-assistant.yaml
+      # Optional: the device's log on the SD card
+      # - packages/sd-card.yaml
+      # - packages/sd-logs.yaml
 
 external_components:
   - source: github://raetha/esphome-freematics@dev
     refresh: 0s
-    components: [freematics_link]
+    components: [freematics_link, sd_card, file_logger]
 
 wifi:
   networks:

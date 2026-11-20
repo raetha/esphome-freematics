@@ -56,3 +56,16 @@ def test_local_components_replace_github_source():
 def test_other_packages_are_refused():
     with pytest.raises(ValueError):
         localize.localize("packages:\n  x: !include other.yaml\n")
+
+
+def test_optional_packages():
+    text = (
+        "packages:\n  x:\n    url: https://github.com/raetha/esphome-freematics\n"
+        "    files:\n      - packages/a.yaml\n      # Optional\n"
+        "      # - packages/b.yaml\nwifi:\n  ssid: x\n"
+    )
+    assert localize.has_optional(text)
+    plain = localize.localize(text, Path("/repo"))
+    assert "b.yaml" not in plain and "  a: !include /repo/packages/a.yaml" in plain
+    full = localize.localize(text, Path("/repo"), optional=True)
+    assert "  b: !include /repo/packages/b.yaml" in full

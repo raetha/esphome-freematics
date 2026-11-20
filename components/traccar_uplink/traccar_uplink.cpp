@@ -1,5 +1,6 @@
 #include "traccar_uplink.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -16,8 +17,10 @@ static uint32_t now_ms() { return App.get_loop_component_start_time(); }
 
 void TraccarUplink::setup() {
   // Everything that needs memory is allocated here, once.
-  this->queue_.init(this->max_queue_);
   this->batch_ = std::make_unique<Record[]>(this->batch_max_);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
+  this->backlog_.init(this->max_queue_, this->store_);
+  if (!this->backlog_.empty())
+    ESP_LOGI(TAG, "%u records from before the restart to send", (unsigned) this->backlog_.size());
   this->socket_ = socket::socket_udp(AF_INET, IPPROTO_IP);
   if (!this->socket_) {
     ESP_LOGE(TAG, "Could not create a UDP socket");
@@ -41,6 +44,11 @@ void TraccarUplink::dump_config() {
                 this->host_.c_str(), this->port_, this->device_id_.c_str(), this->send_interval_ / 1000,
                 this->ack_timeout_ / 1000, this->max_queue_, this->batch_max_, c.moving_speed_kmh, c.moving_interval_s,
                 c.turn_angle_deg, c.stop_delay_s, c.heartbeat_s);
+#ifdef USE_FILE_QUEUE
+  if (this->store_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Records kept on file until acknowledged (%s)",
+                  this->backlog_.stored() ? "ready" : "unavailable");
+#endif
   // Shown whenever a log viewer connects, so it says how the uplink is doing now.
   ESP_LOGCONFIG(TAG, "  Waiting: %u records; acknowledged since boot: %" PRIu32 " (%" PRIu32 " bytes sent)",
                 (unsigned) this->queue_size(), this->records_sent_, this->bytes_sent_);
@@ -116,14 +124,18 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
 }
 
 void TraccarUplink::enqueue_(const Record &record) {
-  // Never drop a record that's in the packet waiting for its answer.
-  if (this->queue_.full() && this->queue_.size() > this->in_flight_count_) {
-    ESP_LOGW(TAG, "Queue full: dropping the oldest unsent record");
-    this->queue_.erase(this->in_flight_count_);
+  switch (this->backlog_.add(record, this->in_flight_count_)) {
+    case ::trackcodec::Added::OK:
+      break;
+    case ::trackcodec::Added::DROPPED_OLDEST:
+      ESP_LOGW(TAG, "Queue full: dropped the oldest unsent record");
+      break;
+    case ::trackcodec::Added::DROPPED:
+      ESP_LOGW(TAG, "Queue full: record dropped");
+      break;
   }
-  if (!this->queue_.push_back(record))
-    ESP_LOGW(TAG, "Queue full: record dropped");
-  ESP_LOGD(TAG, "Queued a record (%u waiting)", (unsigned) this->queue_.size());
+  ESP_LOGD(TAG, "Queued a record (%u waiting%s)", (unsigned) this->backlog_.size(),
+           this->backlog_.stored() ? ", on file" : "");
 }
 
 void TraccarUplink::receive_() {
@@ -145,8 +157,8 @@ void TraccarUplink::receive_() {
                hex);
       continue;
     }
-    size_t n = std::min<size_t>(this->in_flight_count_, this->queue_.size());
-    this->queue_.pop_front(n);
+    size_t n = std::min<size_t>(this->in_flight_count_, this->backlog_.memory().size());
+    this->backlog_.acknowledged(n);
     this->records_sent_ += n;
     this->last_ack_at_ = now_ms() | 1;  // never 0
     if ((size_t) accepted != n)
@@ -161,7 +173,7 @@ void TraccarUplink::receive_() {
 }
 
 void TraccarUplink::send_() {
-  if (this->queue_.empty())
+  if (this->backlog_.memory().empty())
     return;
   if (!this->resolver_.ready()) {
     if (this->resolver_.consume_failure())
@@ -170,8 +182,8 @@ void TraccarUplink::send_() {
       this->resolver_.start(this->host_.c_str(), this->port_, TAG);
     return;
   }
-  size_t count = std::min<size_t>(this->queue_.size(), this->batch_max_);
-  this->queue_.copy(0, count, this->batch_.get());
+  size_t count = std::min<size_t>(this->backlog_.memory().size(), this->batch_max_);
+  this->backlog_.memory().copy(0, count, this->batch_.get());
   size_t len = 0;
   while (count > 0 &&
          (len = ::trackcodec::encode_packet(this->buf_, sizeof(this->buf_), this->packet_id_, this->location_packet_id_,
@@ -236,7 +248,7 @@ void TraccarUplink::loop() {
     this->flush_requested_ = true;
   }
 
-  bool due = this->flush_requested_ || this->queue_.size() >= this->batch_max_ ||
+  bool due = this->flush_requested_ || this->backlog_.memory().size() >= this->batch_max_ ||
              now - this->last_send_ >= this->send_interval_;
   if (due)
     this->send_();

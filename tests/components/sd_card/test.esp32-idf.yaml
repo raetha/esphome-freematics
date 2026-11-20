@@ -1,0 +1,36 @@
+# ESPHome-style component test: every option of sd_card, compiled for an ESP32
+# with ESP-IDF. CI builds it alongside the examples.
+esphome:
+  name: test-sd-card
+  on_boot:
+    - lambda: |-
+        ESP_LOGI("test", "mounted %d at %s, %u MB", id(card).is_mounted(), id(card).get_mount_point(),
+                 (unsigned) (id(card).get_capacity() >> 20));
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [sd_card]
+
+spi:
+  id: sd_bus
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sd_card:
+  id: card
+  spi_id: sd_bus
+  cs_pin: GPIO5
+  mount_point: /card
+  frequency: 10MHz
+  format_if_mount_failed: true
+  max_files: 2

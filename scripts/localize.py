@@ -10,6 +10,10 @@ Builder. CI and local testing need the files in this checkout instead:
 writes build/local/car-traccar.yaml with the remote package files as `!include`s
 of packages/ and the external components from components/. Copy the secrets file
 next to it (CI copies examples/secrets.example.yaml).
+
+With --optional it also writes build/local/car-traccar-optional.yaml, with the
+package files the example lists commented out ("# - packages/sd-card.yaml")
+included as well, so CI builds the optional packages too.
 """
 
 from __future__ import annotations
@@ -35,7 +39,10 @@ def _blocks(text: str) -> list[tuple[str | None, list[str]]]:
     return blocks
 
 
-def _package_files(lines: list[str]) -> list[str]:
+_OPTIONAL = re.compile(r"^\s+#\s*-\s+(packages/\S+\.yaml)\s*$")
+
+
+def _package_files(lines: list[str], optional: bool = False) -> list[str]:
     body = "\n".join(lines)
     if REPO_URL not in body:
         raise ValueError("packages: doesn't fetch from this repository")
@@ -47,7 +54,9 @@ def _package_files(lines: list[str]) -> list[str]:
         if re.match(r"^\s+files:\s*$", line):
             in_files = True
         elif in_files:
-            item = re.match(r"^\s+-\s+(\S+)", line)
+            item = re.match(r"^\s+-\s+(\S+)", line) or (
+                _OPTIONAL.match(line) if optional else None
+            )
             if item:
                 files.append(item.group(1))
             elif line.strip() and not line.strip().startswith("#"):
@@ -57,12 +66,16 @@ def _package_files(lines: list[str]) -> list[str]:
     return files
 
 
-def localize(text: str, root: Path = ROOT) -> str:
+def has_optional(text: str) -> bool:
+    return any(_OPTIONAL.match(line) for line in text.splitlines())
+
+
+def localize(text: str, root: Path = ROOT, optional: bool = False) -> str:
     out: list[str] = []
     for key, lines in _blocks(text):
         if key == "packages":
             out.append("packages:")
-            for f in _package_files(lines):
+            for f in _package_files(lines, optional):
                 out.append(f"  {Path(f).stem}: !include {root / f}")
         elif key == "external_components":
             body = "\n".join(lines)
@@ -85,15 +98,20 @@ def localize(text: str, root: Path = ROOT) -> str:
 
 
 def main(argv: list[str]) -> int:
+    optional = "--optional" in argv
+    argv = [a for a in argv if a != "--optional"]
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
     src, outdir = Path(argv[0]), Path(argv[1])
     outdir.mkdir(parents=True, exist_ok=True)
-    (outdir / src.name).write_text(
-        localize(src.read_text(encoding="utf-8")), encoding="utf-8"
-    )
+    text = src.read_text(encoding="utf-8")
+    (outdir / src.name).write_text(localize(text), encoding="utf-8")
     print(outdir / src.name)
+    if optional and has_optional(text):
+        out = outdir / f"{src.stem}-optional.yaml"
+        out.write_text(localize(text, optional=True), encoding="utf-8")
+        print(out)
     return 0
 
 

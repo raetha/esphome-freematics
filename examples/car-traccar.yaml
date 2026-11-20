@@ -23,11 +23,15 @@ packages:
       - packages/freematics-oneplus-b.yaml
       - packages/wifi-first.yaml
       - packages/uplink-traccar.yaml
+      # Optional: the SD card, keeping records (and the log) on it
+      # - packages/sd-card.yaml
+      # - packages/sd-traccar.yaml
+      # - packages/sd-logs.yaml
 
 external_components:
   - source: github://raetha/esphome-freematics@dev
     refresh: 0s
-    components: [freematics_link, traccar_uplink]
+    components: [freematics_link, traccar_uplink, sd_card, file_queue, file_logger]
 
 wifi:
   networks:
