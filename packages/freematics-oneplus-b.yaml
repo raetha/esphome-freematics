@@ -86,14 +86,12 @@ modem:
           lambda: return !id(modem_restarted);
         then:
           # First answer since the ESP32 started. Fix the module's serial speed
-          # (stored in the module), so bytes it hears while it starts can never
+          # (the SIM7070 stores it itself; AT&W answers ERROR), so bytes it hears while it starts can never
           # set a wrong one; then restart it, as it may still be in a session
           # from before an update or a crash (the board can't cut its power).
           # It answers again in about 10 s, and that sync takes the else branch.
           - globals.set: { id: modem_restarted, value: "true" }
           - modem.send_at: "AT+IPR=115200"
-          - delay: 1s
-          - modem.send_at: "AT&W"
           - delay: 1s
           - if:
               condition:
