@@ -55,6 +55,22 @@ void FreematicsLink::dump_config() {
                 "  Sends only ATI, ATRV, ATGPSON and ATGPS: nothing reaches the vehicle bus",
                 this->gnss_interval_, this->battery_interval_);
   LOG_PIN("  Reset pin: ", this->reset_pin_);
+  // Shown whenever a log viewer connects, so it says how the link is doing now.
+  if (this->version_number_ != 0) {
+    ESP_LOGCONFIG(TAG, "  Co-processor version: %d.%d", this->version_number_ / 10, this->version_number_ % 10);
+  } else {
+    ESP_LOGCONFIG(TAG, "  Co-processor version: not identified");
+  }
+  ESP_LOGCONFIG(TAG,
+                "  Bytes received since boot: %" PRIu32 "\n"
+                "  GNSS replies: %" PRIu32 ", missed in a row: %u",
+                this->rx_total_, this->gnss_replies_, this->gnss_misses_);
+  if (this->fix_now_) {
+    ESP_LOGCONFIG(TAG, "  GNSS fix: %u satellites, %.5f, %.5f", this->last_fix_.satellites, this->last_fix_.latitude,
+                  this->last_fix_.longitude);
+  } else {
+    ESP_LOGCONFIG(TAG, "  GNSS fix: none");
+  }
 }
 
 void FreematicsLink::send_(Command cmd) {
@@ -83,6 +99,7 @@ void FreematicsLink::loop() {
       this->pending_ = Command::NONE;
       if (cmd == Command::GNSS_READ) {
         this->gnss_misses_ = 0;
+        this->gnss_replies_++;
         ESP_LOGV(TAG, "GNSS: %s", this->rx_);  // every couple of seconds: verbose only
       } else {
         ESP_LOGD(TAG, "Reply to %.*s: %s", command_len(cmd), command_text(cmd), this->rx_);
@@ -199,6 +216,14 @@ void FreematicsLink::handle_fix_(const char *reply) {
   if (this->fix_ != nullptr)
     this->fix_->publish_state(good);
 #endif
+  if (good != this->fix_now_) {
+    if (good) {
+      ESP_LOGI(TAG, "GNSS fix: %u satellites", fix.satellites);
+    } else {
+      ESP_LOGI(TAG, "GNSS fix lost");
+    }
+    this->fix_now_ = good;
+  }
   if (!good)
     return;
   this->has_fix_ = true;

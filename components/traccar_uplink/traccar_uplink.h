@@ -106,6 +106,7 @@ class TraccarUplink final : public Component {
   uint32_t last_unix_millis_{0};
 
   uint32_t records_sent_{0};
+  uint32_t last_ack_at_{0};  // loop time of Traccar's last answer; 0: none yet
   uint32_t bytes_sent_{0};
 
   Trigger<> motion_start_trigger_;

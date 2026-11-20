@@ -76,9 +76,6 @@ sensor:
     filters:
       - delta: 2
 
-debug:
-  update_interval: 300s
-
 text_sensor:
   - platform: debug
     reset_reason:

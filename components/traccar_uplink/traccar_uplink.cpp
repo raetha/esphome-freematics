@@ -40,6 +40,14 @@ void TraccarUplink::dump_config() {
                 this->host_.c_str(), this->port_, this->device_id_.c_str(), this->send_interval_ / 1000,
                 this->ack_timeout_ / 1000, this->max_queue_, this->batch_max_, c.moving_speed_kmh, c.moving_interval_s,
                 c.turn_angle_deg, c.stop_delay_s, c.heartbeat_s);
+  // Shown whenever a log viewer connects, so it says how the uplink is doing now.
+  ESP_LOGCONFIG(TAG, "  Waiting: %u records; acknowledged since boot: %" PRIu32 " (%" PRIu32 " bytes sent)",
+                (unsigned) this->queue_size(), this->records_sent_, this->bytes_sent_);
+  if (this->last_ack_at_ != 0) {
+    ESP_LOGCONFIG(TAG, "  Last answer from Traccar: %" PRIu32 " s ago", (now_ms() - this->last_ack_at_) / 1000);
+  } else {
+    ESP_LOGCONFIG(TAG, "  Last answer from Traccar: none since boot");
+  }
 }
 
 bool TraccarUplink::now_(uint32_t *unix) {
@@ -131,6 +139,7 @@ void TraccarUplink::receive_() {
     size_t n = std::min<size_t>(this->in_flight_count_, this->queue_.size());
     this->queue_.pop_front(n);
     this->records_sent_ += n;
+    this->last_ack_at_ = now_ms() | 1;  // never 0
     if ((size_t) accepted != n)
       ESP_LOGW(TAG, "Traccar accepted %d of %u records", accepted, (unsigned) n);
     else

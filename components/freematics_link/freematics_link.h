@@ -96,7 +96,9 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   uint8_t identify_tries_{0};
   // Diagnostics: every byte received since boot, and GNSS reads in a row with no reply.
   uint32_t rx_total_{0};
+  uint32_t gnss_replies_{0};
   uint16_t gnss_misses_{0};
+  bool fix_now_{false};  // the latest reply held a usable fix
 
   char rx_[256]{};
   size_t rx_len_{0};

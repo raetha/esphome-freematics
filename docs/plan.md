@@ -59,6 +59,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-19: Third bench test (0.1.0-dev.4, charger, logs over Wi-Fi): the device had restarted shortly before the log began (its clock had run 263 s without a sync, and safe mode marked the boot good 4 s into the log), and the API dropped right after the uplink re-sent a record Traccar hadn't acknowledged within 15 s, as in the second test. The uplink sent a location record, so the co-processor most likely answered `ATGPS`, but its replies are logged only at VERBOSE and its start-up before the log began. The board package now has `debug:` (reset reason and uptime) and both components report their state when a log viewer connects.
+
 - 2026-11-19: The clock now comes from GPS first; SNTP (ESPHome's default every 15 minutes, about 300 bytes a sync, 15 to 30 KB a day over LTE) became a fallback every 12 hours. Cellular network time was set aside: it needs AT commands alongside PPP and not every carrier sends it.
 
 - 2026-11-19: Second bench test on a 2 A charger, logs over Wi-Fi: Wi-Fi connected, SNTP synced and the uplink sent a heartbeat (27 bytes), so the first test's Wi-Fi failure was power. The co-processor still answered no `ATGPS` and the modem no AT command. Merged `freematics_link` (phase 2) into `dev` in place of the UART lambda: it resets the co-processor, identifies it with `ATI` and logs what came back when a reply is missing. The modem pins became substitutions, since the library moves them to GPIO32/33 for co-processor version 13.

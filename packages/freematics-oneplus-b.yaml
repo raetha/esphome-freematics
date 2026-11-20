@@ -51,6 +51,11 @@ time:
     id: sntp_time
     update_interval: ${sntp_interval}
 
+# Logs uptime and why the last restart happened (power-on, brownout, panic,
+# watchdog...) whenever a log viewer connects.
+debug:
+  update_interval: 300s
+
 # ---------- Cellular (xBee socket) ----------
 modem:
   id: cell
