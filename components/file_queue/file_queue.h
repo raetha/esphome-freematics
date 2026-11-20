@@ -15,6 +15,8 @@ class FileQueue final : public Component {
   void setup() override;
   void loop() override;
   void dump_config() override;
+  /// Before a planned restart or deep sleep: sync what isn't on the card yet.
+  void on_shutdown() override;
   // After file systems are mounted (sd_card), before the components using the queue.
   float get_setup_priority() const override { return setup_priority::IO; }
 

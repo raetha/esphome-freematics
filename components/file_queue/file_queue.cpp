@@ -38,6 +38,11 @@ void FileQueue::loop() {
     this->io_failed_("sync");
 }
 
+void FileQueue::on_shutdown() {
+  if (this->is_ready() && this->file_.dirty() && !this->file_.sync())
+    this->io_failed_("sync");
+}
+
 void FileQueue::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "File queue:\n"

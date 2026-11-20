@@ -31,6 +31,8 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - A bench test of ESPHome's modem component (`examples/bench-modem-esphome.yaml`): the board package's power-key presses and modem settings with only the co-processor link beside them, to find out what in the full configuration keeps the modem from answering.
 - The Traccar configuration shows its logs in ESPHome Device Builder over Wi-Fi, next to over-the-air updates, without connecting to Home Assistant or using cellular data. It needs a `freematics_api_key` secret.
 - Over-the-air updates are encrypted with the device's API key; the separate OTA password secret is gone.
+- Sleep while parked (`packages/standby.yaml`, optional in the Traccar configuration): once the car has been off and still for 10 minutes, the device sends what it has, switches the cellular module, GPS and co-processor off and sleeps, waking for a moment every minute to check the 12 V voltage. It stays awake again as soon as the car is on (its 12 V system charging, 13.2 V or more), and wakes fully every 6 hours to report one record to Traccar. It never sleeps when it isn't on a car (powered over USB). All adjustable (`standby_voltage`, `standby_after`, `standby_check`, `standby_heartbeat`).
+- The SD card's record queue and log are written out before a planned restart or sleep.
 
 ### Internal
 

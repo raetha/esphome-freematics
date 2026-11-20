@@ -28,6 +28,7 @@ From `FreematicsPlus.cpp` and `FreematicsOBD.cpp`. Each ends in `\r`.
 | `ATR` | | Soft reset (versions 14 and later use the GPIO15 line instead) |
 | `ATRV` | Battery voltage | Battery voltage |
 | `ATGPSON` / `ATGPSOFF` | | Internal GNSS power |
+| `ATLP` | | Co-processor low-power mode, as the stock firmware's standby sends it (`COBD::enterLowPowerMode()`); a reset wakes it |
 | `ATGPS` | `$GNIFO,date,time,lat×1e6,lng×1e6,alt×100,speed×100,heading×100,sats,hdop` | Position; speed is in knots (`GPS_DATA.speed` is documented as knots; the telelogger multiplies by 1.852 for km/h) |
 | `ATGRR` | Raw NMEA | Debugging GNSS |
 | `ATGDS <hex bytes>` | | Send configuration bytes to the GNSS |
@@ -37,7 +38,7 @@ From `FreematicsPlus.cpp` and `FreematicsOBD.cpp`. Each ends in `\r`.
 
 ## Vehicle bus: passive only
 
-The project sends nothing to the vehicle: no OBD requests (`ATZ`/`ATSP` set-up, mode 01/09 PIDs), no writes, no clearing codes. Requests and writes are the likely reason cars complained about the stock firmware. The commands the packages use (`ATI`, `ATRV`, `ATGPSON`, `ATGPS`) are answered by the co-processor itself (its version, its own voltage reading, its GNSS) and don't touch the bus. The `freematics_link` component can send only those four: its command set is a fixed enum, with no way to pass other text through.
+The project sends nothing to the vehicle: no OBD requests (`ATZ`/`ATSP` set-up, mode 01/09 PIDs), no writes, no clearing codes. Requests and writes are the likely reason cars complained about the stock firmware. The commands the packages use (`ATI`, `ATRV`, `ATGPSON`, `ATGPS`, and `ATGPSOFF` and `ATLP` before sleeping) are answered by the co-processor itself (its version, its own voltage reading, its GNSS, its power) and don't touch the bus. The `freematics_link` component can send only those six: its command set is a fixed enum, with no way to pass other text through.
 
 What passive reading can get is open: the library has a CAN monitoring mode (`ATM1`, used by the `can_sniffer` example) that listens to broadcast frames, but many cars put a gateway between the OBD port and their internal buses, so there may be little to hear. Unknown too: whether the co-processor's own firmware probes the bus by itself at power-up. Phase 4 finds out on each car.
 

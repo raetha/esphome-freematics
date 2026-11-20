@@ -1,0 +1,157 @@
+# Sleep while parked, like the stock firmware's standby but deeper: once the
+# car has been off and still for standby_after, the device sends what it has,
+# switches the cellular module off (AT+CPOWD=1), puts the GNSS and co-processor
+# in low power (ATGPSOFF, ATLP) and puts the ESP32 into deep sleep.
+#
+# Every standby_check it wakes for a fraction of a second, reads the battery
+# voltage and, unless the car is on, sleeps again before Wi-Fi or the modem
+# start. The car counts as on when the 12 V system is charging (at or above
+# standby_voltage, about 13.2 V: the alternator, or a hybrid's DC-DC converter
+# while the car is on or charging). Every standby_heartbeat it wakes fully to
+# report one record to Traccar, then sleeps again.
+#
+# The dongle isn't on a car when the voltage is below standby_min_voltage (on
+# USB on the bench): then it never sleeps. While it sleeps it can't be updated
+# over Wi-Fi: start the car, or unplug it and plug it back in, and it stays
+# awake for standby_after.
+#
+# Waking on motion (the IMU) isn't built yet: the IMU's model and interrupt
+# pin aren't confirmed on the Model B. This package logs what answers on the
+# IMU's I2C bus at start-up, to find out.
+#
+# Needs the board package, an uplink package (traccar_uplink with id traccar)
+# and the battery_voltage sensor; the SD card packages are synced before sleep.
+
+substitutions:
+  standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
+  standby_min_voltage: "9.0"    # V: below, the dongle isn't on a car (USB): never sleep
+  standby_after: "600"          # s: car off and still this long, then sleep (Traccar's stop record goes out at 180 s)
+  standby_check: "60"           # s: deep sleep between voltage checks (each costs about half a second awake)
+  standby_heartbeat: "6"        # hours: wake fully to report one record this often; "0": never
+  standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
+
+deep_sleep:
+  id: sleeper
+
+i2c:
+  id: imu_bus
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+globals:
+  - id: parked_s                # seconds the car has been off and still
+    type: uint32_t
+    initial_value: "0"
+  - id: heartbeat_wake          # this start is a heartbeat wake: sleep again once reported
+    type: bool
+    initial_value: "false"
+
+esphome:
+  on_boot:
+    # Just after the sensors are set up (600), before the co-processor link
+    # (599), Wi-Fi and the modem: on a timer wake, read the voltage and go back
+    # to sleep unless the car is on or a heartbeat is due.
+    - priority: 599.5
+      then:
+        - lambda: |-
+            // Counts the timer wakes since the last time the device stayed
+            // awake; kept in RTC memory through deep sleep.
+            static RTC_DATA_ATTR uint32_t checks = 0;
+            bool timer_wake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
+            if (timer_wake) {
+              id(battery_voltage).update();
+              float v = id(battery_voltage).state;
+              bool car_on = std::isnan(v) || v < ${standby_min_voltage} || v >= ${standby_voltage};
+              checks++;
+              const uint32_t check_s = ${standby_check};
+              bool heartbeat = ${standby_heartbeat} > 0 &&
+                               checks * check_s >= static_cast<uint32_t>(${standby_heartbeat}) * 3600;
+              if (!car_on && !heartbeat) {
+                // Nothing logged here: the SD card log is written by a task,
+                // and a sleep in the middle of a card write could damage it.
+                // The short wait lets a write already under way finish.
+                vTaskDelay(pdMS_TO_TICKS(200));
+                esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(check_s) * 1000000ULL);
+                esp_deep_sleep_start();
+              }
+              ESP_LOGI("standby", "Woke: %.2f V, %s", v, car_on ? "the car is on" : "heartbeat");
+              id(heartbeat_wake) = !car_on;
+            }
+            checks = 0;
+            // Staying awake: release the pins held through sleep.
+            gpio_hold_dis(GPIO_NUM_27);
+            gpio_hold_dis(GPIO_NUM_15);
+            gpio_hold_dis(GPIO_NUM_25);
+            gpio_deep_sleep_hold_dis();
+    # Once the network is up, say what answers on the IMU's bus (once per start).
+    - priority: -200
+      then:
+        - lambda: |-
+            for (uint8_t addr : {0x68, 0x69}) {
+              uint8_t reg = 0x75, who = 0;  // MPU-9250 / MPU-6500: WHO_AM_I
+              if (id(imu_bus)->write_readv(addr, &reg, 1, &who, 1) == i2c::ERROR_OK)
+                ESP_LOGI("standby", "IMU at 0x%02X: register 0x75 = 0x%02X (0x71: MPU-9250, 0x70: MPU-6500)", addr, who);
+              reg = 0x00;  // ICM-20948: WHO_AM_I in bank 0
+              if (id(imu_bus)->write_readv(addr, &reg, 1, &who, 1) == i2c::ERROR_OK)
+                ESP_LOGI("standby", "IMU at 0x%02X: register 0x00 = 0x%02X (0xEA: ICM-20948)", addr, who);
+            }
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          float v = id(battery_voltage).state;
+          bool car_off = !std::isnan(v) && v >= ${standby_min_voltage} && v < ${standby_voltage};
+          if (car_off && !id(traccar).is_moving())
+            id(parked_s) += 10;
+          else
+            id(parked_s) = 0;
+      - if:
+          condition:
+            lambda: |-
+              if (id(enter_standby).is_running())
+                return false;
+              if (id(heartbeat_wake))
+                return id(parked_s) >= ${standby_report_time} ||
+                       (id(parked_s) >= 60 && id(traccar).queue_size() == 0 && id(traccar).records_sent() > 0);
+              return id(parked_s) >= ${standby_after};
+          then:
+            - script.execute: enter_standby
+
+script:
+  - id: enter_standby
+    mode: single
+    then:
+      - logger.log: "Standby: parked; sending what's waiting, then sleeping"
+      - lambda: id(traccar).flush();
+      - wait_until:
+          condition:
+            lambda: return id(traccar).queue_size() == 0;
+          timeout: 60s
+      - lambda: id(coproc_link).enter_standby();
+      - wait_until:
+          condition:
+            lambda: return id(coproc_link).in_standby();
+          timeout: 5s
+      - delay: 1s                 # the ATLP reply
+      - if:
+          condition:
+            lambda: return id(modem_synced);
+          then:
+            # Out of PPP and CMUX first, then the module's own power-down.
+            - modem.disable:
+            - delay: 5s
+            - modem.send_at: "AT+CPOWD=1"
+            - delay: 3s
+      - logger.log: "Standby: sleeping"
+      - lambda: |-
+          // Hold the power key released, the co-processor out of reset and
+          // the buzzer quiet while the ESP32 sleeps (its pins float otherwise).
+          gpio_hold_en(GPIO_NUM_27);
+          gpio_hold_en(GPIO_NUM_15);
+          gpio_hold_en(GPIO_NUM_25);
+          gpio_deep_sleep_hold_en();
+      - deep_sleep.enter:
+          id: sleeper
+          sleep_duration: ${standby_check}s

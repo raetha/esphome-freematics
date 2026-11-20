@@ -83,6 +83,16 @@ bool FileLogger::open_() {
   return this->file_ != nullptr;
 }
 
+void FileLogger::on_shutdown() {
+  if (this->file_ == nullptr)
+    return;
+  // The writer task writes what's waiting and syncs it; wait up to half a
+  // second for it (shutdown is the one place a short wait is acceptable).
+  this->sync_now_.store(true);
+  for (int i = 0; i < 50 && this->sync_now_.load(); i++)
+    vTaskDelay(pdMS_TO_TICKS(10));
+}
+
 void FileLogger::write_loop_() {
   char chunk[WRITE_CHUNK];
   TickType_t last_open_try = 0;
@@ -121,12 +131,15 @@ void FileLogger::write_loop_() {
       continue;  // more may be waiting
     }
 
-    if (unsynced && now - last_sync >= pdMS_TO_TICKS(this->flush_interval_)) {
+    if (!unsynced)
+      this->sync_now_.store(false);  // nothing waiting: a shutdown needn't wait
+    if (unsynced && (this->sync_now_.load() || now - last_sync >= pdMS_TO_TICKS(this->flush_interval_))) {
       // Everything waiting is written: make it survive a power cut.
       fflush(this->file_);
       fsync(fileno(this->file_));
       unsynced = false;
       last_sync = now;
+      this->sync_now_.store(false);
       if (ftell(this->file_) >= static_cast<long>(this->max_size_))  // NOLINT(google-runtime-int)
         this->rotate_();
     }

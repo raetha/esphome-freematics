@@ -27,6 +27,8 @@ packages:
       # - packages/sd-card.yaml
       # - packages/sd-traccar.yaml
       # - packages/sd-logs.yaml
+      # Optional: sleep while parked, waking when the car is turned on (needs a car: never sleeps on USB)
+      # - packages/standby.yaml
 
 external_components:
   - source: github://raetha/esphome-freematics@dev

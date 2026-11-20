@@ -2,7 +2,8 @@
 
 The co-processor (an STM32) owns the vehicle bus and the internal GNSS receiver.
 This component sends it only commands it answers itself (ATI, ATRV, ATGPSON,
-ATGPS); there is no way to send it anything else, so nothing reaches the bus.
+ATGPS, and ATGPSOFF and ATLP before sleeping); there is no way to send it
+anything else, so nothing reaches the bus.
 """
 
 import esphome.codegen as cg

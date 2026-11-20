@@ -224,7 +224,7 @@ sensor:
       - multiply: 11.0   # 100k/10k divider; calibrate against a meter
 
 # ---------- Co-processor link (STM32F103: OBD and the internal GNSS) ----------
-# freematics_link sends only ATI, ATRV, ATGPSON and ATGPS, all answered by the
+# freematics_link sends only ATI, ATRV, ATGPSON, ATGPS, ATGPSOFF and ATLP, all answered by the
 # co-processor itself: nothing reaches the vehicle bus. The device config loads
 # the component (external_components: components: [freematics_link, ...]).
 

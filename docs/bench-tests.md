@@ -123,6 +123,14 @@ With tests 2 to 6 passing: the dongle in the car on OBD power, with the SD packa
 
 **Send back:** what Traccar showed, the data used, the card's log.
 
+## 7b. Sleep while parked
+
+With `packages/standby.yaml` uncommented in the car config, in the car (it never sleeps on USB). Drive, park, and leave it: 3 minutes after stopping Traccar gets the stop record; 10 minutes after that the device logs "Standby: parked; sending what's waiting, then sleeping" and "Standby: sleeping", and goes quiet (the logs disconnect). Start the car: within a minute it wakes ("Woke: 14.x V, the car is on"), presses the modem's power key and tracks again. Left parked, it reports one record every 6 hours.
+
+**Look for:** the standby lines in the SD card's log; in Traccar, the 6-hourly records while parked and the first record of the next trip; the IMU lines at start-up ("IMU at 0x68: ...").
+
+**Send back:** the SD card's log after a night or a weekend, and the 12 V battery's behaviour if anything seems off. To update it while it sleeps, start the car (or unplug and plug it back in): it stays awake for 10 minutes.
+
 ## 8. The stock firmware, for comparison (optional)
 
 If the cellular module never answers in test 3: plug a computer into the other dongle (still on the stock firmware), open a serial monitor at 115200 baud, and power it up. The first lines show `TYPE:` (the co-processor version), `GNSS:` and the cellular module's start. That shows whether the same hardware's cellular works on that power, and how the stock firmware starts it.

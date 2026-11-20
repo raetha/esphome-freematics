@@ -25,6 +25,10 @@ static const char *command_text(Command cmd) {
       return "ATGPSON\r";
     case Command::GNSS_READ:
       return "ATGPS\r";
+    case Command::GNSS_OFF:
+      return "ATGPSOFF\r";
+    case Command::LOW_POWER:
+      return "ATLP\r";
     default:
       return "";
   }
@@ -35,6 +39,14 @@ static int command_len(Command cmd) { return std::max<int>(0, static_cast<int>(s
 
 // How long to wait for a reply: the library's own timeouts, with room to spare.
 static uint32_t command_timeout(Command cmd) { return cmd == Command::GNSS_READ ? 300 : 1000; }
+
+void FreematicsLink::enter_standby() {
+  if (this->state_ == State::STANDBY_GNSS_OFF || this->state_ == State::STANDBY_LOW_POWER ||
+      this->state_ == State::STANDBY)
+    return;
+  ESP_LOGI(TAG, "Standby: GNSS off, co-processor to low power");
+  this->state_ = State::STANDBY_GNSS_OFF;
+}
 
 void FreematicsLink::setup() {
   // The library resets co-processors from version 14 on with this pin; holding
@@ -48,12 +60,13 @@ void FreematicsLink::setup() {
 }
 
 void FreematicsLink::dump_config() {
-  ESP_LOGCONFIG(TAG,
-                "Freematics co-processor link:\n"
-                "  GNSS read every %" PRIu32 " ms (0: off)\n"
-                "  Battery voltage read every %" PRIu32 " ms (0: off)\n"
-                "  Sends only ATI, ATRV, ATGPSON and ATGPS: nothing reaches the vehicle bus",
-                this->gnss_interval_, this->battery_interval_);
+  ESP_LOGCONFIG(
+      TAG,
+      "Freematics co-processor link:\n"
+      "  GNSS read every %" PRIu32 " ms (0: off)\n"
+      "  Battery voltage read every %" PRIu32 " ms (0: off)\n"
+      "  Sends only ATI, ATRV, ATGPSON, ATGPS, and ATGPSOFF and ATLP before sleeping: nothing reaches the vehicle bus",
+      this->gnss_interval_, this->battery_interval_);
   LOG_PIN("  Reset pin: ", this->reset_pin_);
   // Shown whenever a log viewer connects, so it says how the link is doing now.
   if (this->version_number_ != 0) {
@@ -147,6 +160,16 @@ void FreematicsLink::loop() {
       return;
     case State::RUNNING:
       break;
+    case State::STANDBY_GNSS_OFF:
+      this->send_(Command::GNSS_OFF);
+      this->state_ = State::STANDBY_LOW_POWER;
+      return;
+    case State::STANDBY_LOW_POWER:
+      this->send_(Command::LOW_POWER);
+      this->state_ = State::STANDBY;
+      return;
+    case State::STANDBY:
+      return;
   }
 
   if (this->gnss_interval_ != 0 && now - this->last_gnss_ >= this->gnss_interval_) {

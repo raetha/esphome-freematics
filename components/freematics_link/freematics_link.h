@@ -23,14 +23,16 @@ using ::freematics::Fix;
 /// The commands this component may send. All are answered by the co-processor
 /// itself; none reaches the vehicle bus. There is deliberately no way to send
 /// anything else.
-enum class Command : uint8_t { NONE, IDENTIFY, BATTERY, GNSS_ON, GNSS_READ };
+enum class Command : uint8_t { NONE, IDENTIFY, BATTERY, GNSS_ON, GNSS_READ, GNSS_OFF, LOW_POWER };
 
 class FreematicsLink final : public Component, public uart::UARTDevice {
  public:
   void setup() override;
   void loop() override;
   void dump_config() override;
-  float get_setup_priority() const override { return setup_priority::DATA; }
+  // Just after sensors (DATA): an early on_boot check can then read the battery
+  // voltage and go back to sleep before this resets the co-processor (standby).
+  float get_setup_priority() const override { return setup_priority::DATA - 1.0f; }
 
   void set_reset_pin(GPIOPin *pin) { this->reset_pin_ = pin; }
   void set_gnss_interval(uint32_t ms) { this->gnss_interval_ = ms; }
@@ -57,6 +59,13 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   const Fix &last_fix() const { return this->last_fix_; }
   /// The co-processor's version (14 for 1.4), 0 until known.
   int version() const { return this->version_number_; }
+
+  /// Before the ESP32 sleeps: switch the GNSS off (ATGPSOFF) and put the
+  /// co-processor in its low-power mode (ATLP), as the stock firmware's
+  /// standby does; polling stops. A reset (the next boot) wakes it again.
+  void enter_standby();
+  /// True once both commands have been sent (answered or not).
+  bool in_standby() const { return this->state_ == State::STANDBY; }
 
   Trigger<Fix> *get_fix_trigger() { return &this->fix_trigger_; }
 
@@ -86,7 +95,15 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *version_{nullptr};
 #endif
 
-  enum class State : uint8_t { RESETTING, IDENTIFYING, GNSS_STARTING, RUNNING };
+  enum class State : uint8_t {
+    RESETTING,
+    IDENTIFYING,
+    GNSS_STARTING,
+    RUNNING,
+    STANDBY_GNSS_OFF,
+    STANDBY_LOW_POWER,
+    STANDBY
+  };
   State state_{State::RESETTING};
   Command pending_{Command::NONE};
   uint32_t sent_at_{0};

@@ -23,6 +23,8 @@ class FileLogger final : public Component {
   void setup() override;
   void loop() override;
   void dump_config() override;
+  /// Before a planned restart or deep sleep: let the writer task write and sync what's waiting.
+  void on_shutdown() override;
   // After the file systems are mounted.
   float get_setup_priority() const override { return setup_priority::IO; }
 
@@ -50,6 +52,7 @@ class FileLogger final : public Component {
   std::atomic<bool> is_open_{false};
   std::atomic<bool> failed_{false};
   std::atomic<uint32_t> written_{0};
+  std::atomic<bool> sync_now_{false};
 
   TaskHandle_t task_{nullptr};
   const char *path_{""};
