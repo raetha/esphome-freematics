@@ -8,16 +8,15 @@
 # minutes. Lines starting "<<<" are the module talking. Then put the normal
 # config back.
 #
-# If nothing answers, try the library's other pins (probe_rx_pin: GPIO32,
-# probe_tx_pin: GPIO33), then a longer press (pwrkey_press: 1500ms).
-# Secrets it uses: wifi_ssid, wifi_password, freematics_ota_password,
-# freematics_api_key.
+# The press gets longer as it goes: 200 ms (the library's) for tries 1 to 12,
+# then 1 s, then 1.5 s, so one install covers all three. With co-processor 1.4
+# the library uses GPIO35/GPIO2 (GPIO32/GPIO33 only for version 1.3).
+# Secrets it uses: wifi_ssid, wifi_password, freematics_api_key.
 
 substitutions:
   name: freematics-eli            # the device's existing name, so it installs over the air
   probe_rx_pin: GPIO35
   probe_tx_pin: GPIO2
-  pwrkey_press: 200ms             # the library's press; a longer one (1500ms) is the next thing to try
 
 esphome:
   name: ${name}
@@ -44,7 +43,7 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret freematics_ota_password
+    encryption:
 
 output:
   - platform: gpio
@@ -99,14 +98,13 @@ script:
       - uart.write: { id: probe, data: "AT+CGDCONT?\r" }
 
 interval:
-  # Like CellSIMCOM::begin(): press, wait, ask, up to 30 times. The press is
-  # repeated only every fourth try, so a long press doesn't switch the module
-  # back off while it starts.
+  # Like CellSIMCOM::begin(): press, wait, ask, up to 36 times. The press is
+  # repeated only every fourth try, so the module has time to start between.
   - interval: 3s
     then:
       - if:
           condition:
-            lambda: return !id(answered) && id(tries) < 30;
+            lambda: return !id(answered) && id(tries) < 36;
           then:
             - lambda: id(tries)++;
             - if:
@@ -114,16 +112,16 @@ interval:
                   lambda: return id(tries) % 4 == 1;
                 then:
                   - logger.log:
-                      format: "Pressing PWRKEY (try %d)"
-                      args: [id(tries)]
+                      format: "Pressing PWRKEY for %d ms (try %d)"
+                      args: ["id(tries) <= 12 ? 200 : id(tries) <= 24 ? 1000 : 1500", id(tries)]
                   - output.turn_on: pwrkey
-                  - delay: ${pwrkey_press}
+                  - delay: !lambda "return id(tries) <= 12 ? 200 : id(tries) <= 24 ? 1000 : 1500;"
                   - output.turn_off: pwrkey
                   - delay: 1s
             - uart.write: { id: probe, data: "AT\r" }
       - if:
           condition:
-            lambda: return !id(answered) && id(tries) == 30;
+            lambda: return !id(answered) && id(tries) == 36;
           then:
             - lambda: id(tries)++;
             - logger.log:

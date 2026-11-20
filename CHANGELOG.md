@@ -21,6 +21,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - The Traccar server settings the configuration needs (docs/configurations.md).
 - A bench probe for the cellular module (`examples/bench-modem-probe.yaml`): presses the power key and sends `AT` as Freematics' own library does, and logs everything the module answers, without ESPHome's modem component and without using data.
 - The Traccar configuration shows its logs in ESPHome Device Builder over Wi-Fi, next to over-the-air updates, without connecting to Home Assistant or using cellular data. It needs a `freematics_api_key` secret.
+- Over-the-air updates are encrypted with the device's API key; the separate OTA password secret is gone.
 
 ### Internal
 

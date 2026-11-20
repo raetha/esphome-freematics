@@ -4,7 +4,7 @@
 # Paste this whole file into a new device in ESPHome Device Builder, change the
 # substitutions below, and install. Everything else comes from GitHub.
 # Secrets it uses (Device Builder -> Secrets): wifi_ssid, wifi_password,
-# freematics_api_key, freematics_ota_password, and the wg_* keys below.
+# freematics_api_key and the wg_* keys below.
 # Add the device to Home Assistant once while it's on home Wi-Fi.
 
 substitutions:
@@ -41,7 +41,7 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret freematics_ota_password
+    encryption:                       # uses the API key above
 
 # Tunnel home so Home Assistant stays private. Only HA's address goes through
 # it; everything else, including SNTP, goes direct.
