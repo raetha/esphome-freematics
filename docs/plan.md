@@ -61,6 +61,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: Traccar answers: the cause was a firewall rule on the owner's side. 0.1.0-dev.11 on the bench sent a record over Wi-Fi and Traccar acknowledged it within 90 ms, with the record kept on the SD card until then. Still open: the modem never answers (on the car's power next), and ESPHome still warns about the occasional 55 to 60 ms SD write (`traccar_uplink` queuing at boot, `file_queue`'s 30-second sync); a sync on its own task would remove that if it matters.
+
 - 2026-11-20: At home the device reaches Traccar through local DNS on the internal address, with no port forwarding, and still gets no answer, so the problem is Traccar's side. Found while testing locally: Traccar 6 keeps protocol ports and transports in its database (Settings → Protocols), and `traccar.xml` only seeds them on first start. Added `traccar_protocol: freematics` (port 5170, the stock firmware's protocol) as a check, verified against Traccar 6.17.0: positions decoded, login answered.
 
 - 2026-11-20: USB install from a computer with every SD package on: the record file was created and records queued "on file"; ESPHome warned that `file_logger` (52 to 88 ms) and, through the record queue, `freematics_link` (93 ms) blocked the loop, so the log writer now runs in a task of its own and the record file is made full size at creation and synced every 30 s instead of on every change. On the computer's USB port Wi-Fi again failed with "Auth Expired" right after a PWRKEY press, which fits too little power for the cellular module to start; the modem tests need the charger or the car.
