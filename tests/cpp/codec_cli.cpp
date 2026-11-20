@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 #include "record_queue.h"
+#include "freematics_text.h"
 #include "teltonika.h"
 #include "tracker.h"
 
@@ -45,6 +46,37 @@ int main() {
       for (size_t i = 0; i < len; i++)
         std::printf("%02x", buf[i]);
       std::printf("\n");
+    } else if (!std::strcmp(cmd, "freematics")) {
+      // freematics <id> <size> <n>, then n records as for packet: the text packet, or "-"
+      unsigned size, n;
+      char id[80];
+      std::scanf("%79s %u %u", id, &size, &n);
+      std::vector<Record> rs(n);
+      for (auto &r : rs) {
+        unsigned t, has, sats, mv;
+        int motion;
+        std::scanf("%u %u %f %f %f %f %u %u %d", &t, &has, &r.latitude, &r.longitude, &r.speed_kmh, &r.course_deg,
+                   &sats, &mv, &motion);
+        r.time = t;
+        r.has_location = has;
+        r.satellites = sats;
+        r.battery_mv = mv;
+        r.motion = motion;
+      }
+      std::vector<char> buf(size);
+      size_t len = encode_freematics(buf.data(), buf.size(), id, rs.data(), rs.size());
+      std::printf("%.*s\n", len ? static_cast<int>(len) : 1, len ? buf.data() : "-");
+    } else if (!std::strcmp(cmd, "login")) {
+      unsigned ts;
+      char id[80];
+      std::scanf("%79s %u", id, &ts);
+      char buf[128];
+      size_t len = encode_freematics_login(buf, sizeof(buf), id, ts);
+      std::printf("%.*s\n", static_cast<int>(len), buf);
+    } else if (!std::strcmp(cmd, "loginreply")) {
+      char text[80];
+      std::scanf("%79s", text);
+      std::printf("%d\n", is_freematics_login_reply(reinterpret_cast<const uint8_t *>(text), std::strlen(text)));
     } else if (!std::strcmp(cmd, "ack")) {
       char hex[64];
       unsigned lpid;

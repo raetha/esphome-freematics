@@ -27,6 +27,8 @@ CONF_HEARTBEAT_INTERVAL = "heartbeat_interval"
 CONF_ON_MOTION_START = "on_motion_start"
 CONF_ON_MOTION_STOP = "on_motion_stop"
 CONF_FILE_QUEUE_ID = "file_queue_id"
+CONF_PROTOCOL = "protocol"
+PROTOCOLS = {"teltonika": 5027, "freematics": 5170}  # and their default ports
 
 # Bump when trackcodec::Record's layout changes, so stored files start afresh.
 RECORD_FORMAT = 1
@@ -54,7 +56,10 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(TraccarUplink),
             cv.Required(CONF_HOST): cv.string_strict,
-            cv.Optional(CONF_PORT, default=5027): cv.port,
+            cv.Optional(CONF_PROTOCOL, default="teltonika"): cv.one_of(
+                *PROTOCOLS, lower=True
+            ),
+            cv.Optional(CONF_PORT): cv.port,
             cv.Required(CONF_DEVICE_ID): _device_id,
             cv.Optional(CONF_SEND_INTERVAL, default="60s"): cv.All(
                 cv.positive_time_period_milliseconds,
@@ -88,7 +93,8 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     cg.add(var.set_host(config[CONF_HOST]))
-    cg.add(var.set_port(config[CONF_PORT]))
+    cg.add(var.set_port(config.get(CONF_PORT, PROTOCOLS[config[CONF_PROTOCOL]])))
+    cg.add(var.set_freematics_protocol(config[CONF_PROTOCOL] == "freematics"))
     cg.add(var.set_device_id(config[CONF_DEVICE_ID]))
     cg.add(var.set_send_interval(config[CONF_SEND_INTERVAL]))
     cg.add(var.set_ack_timeout(config[CONF_ACK_TIMEOUT]))

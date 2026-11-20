@@ -7,6 +7,10 @@ map), and prints Traccar's acknowledgement:
 
     python3 scripts/traccar_check.py traccar.example.com test
     python3 scripts/traccar_check.py 203.0.113.7 test --port 5027
+    python3 scripts/traccar_check.py traccar.example.com test --protocol freematics
+
+With --protocol freematics it sends a Freematics login event to UDP 5170
+instead, which Traccar answers the same way.
 
 The device ID must exist in Traccar: Traccar ignores unknown devices and sends
 no acknowledgement. Run it from outside the home network (a phone's hotspot)
@@ -37,11 +41,22 @@ def packet(device_id: str, packet_id: int = 1, location_id: int = 1) -> bytes:
     return struct.pack(">H", len(body)) + body
 
 
+def freematics_login(device_id: str) -> bytes:
+    """A Freematics login event; Traccar answers it with 1#EV=1,RX=1,..."""
+    text = f"{device_id}#EV=1,TS={int(time.time()) % 100000},ID={device_id}"
+    return f"{text}*{sum(text.encode()) % 256:02X}".encode()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("host")
     parser.add_argument("device_id")
-    parser.add_argument("--port", type=int, default=5027)
+    parser.add_argument(
+        "--protocol", choices=("teltonika", "freematics"), default="teltonika"
+    )
+    parser.add_argument(
+        "--port", type=int, help="default: 5027, or 5170 for freematics"
+    )
     parser.add_argument("--timeout", type=float, default=5.0)
     args = parser.parse_args()
 
@@ -51,26 +66,36 @@ def main() -> int:
         print(f"Can't resolve {args.host}: {e}")
         return 2
     print(f"{args.host} is {address}")
-    data = packet(args.device_id)
+    freematics = args.protocol == "freematics"
+    port = args.port or (5170 if freematics else 5027)
+    data = freematics_login(args.device_id) if freematics else packet(args.device_id)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(args.timeout)
     for attempt in (1, 2, 3):
-        sock.sendto(data, (address, args.port))
-        print(f"Sent {len(data)} bytes to {address}:{args.port} (try {attempt})")
+        sock.sendto(data, (address, port))
+        print(f"Sent {len(data)} bytes to {address}:{port} (try {attempt})")
         try:
             reply, _ = sock.recvfrom(64)
         except TimeoutError:
             continue
         print(f"Answer: {reply.hex()}")
+        if freematics:
+            if reply.startswith(b"1#EV=1,RX=1"):
+                print(f"Traccar answered the login: it's reachable. ({reply.decode()})")
+                return 0
+            print("An answer, but not Traccar's answer to a login.")
+            return 1
         if len(reply) >= 7 and reply[:5] == bytes.fromhex("0005000001"):
             print(f"Traccar acknowledged {reply[6]} record(s): it's reachable.")
             return 0
         print("An answer, but not a Teltonika acknowledgement.")
         return 1
     print(
-        "No answer. Check: the device ID exists in Traccar; UDP (not just TCP) "
-        f"{args.port} is open and forwarded to Traccar; the name isn't proxied "
-        "(Cloudflare's proxy carries only web traffic, not UDP)."
+        "No answer. Check: the device ID exists in Traccar; in Traccar's "
+        f"Settings > Protocols, {args.protocol} is on port {port} with UDP (or "
+        f"All) transport; UDP {port} reaches Traccar (Docker publishes it only "
+        f"as {port}:{port}/udp); the name isn't proxied (Cloudflare's proxy "
+        "carries only web traffic)."
     )
     return 1
 

@@ -49,7 +49,8 @@ All of these are substitutions in `packages/uplink-traccar.yaml`; a device confi
 
 ### Traccar server settings
 
-- **Teltonika protocol on port 5027 with UDP**: in Traccar's protocol settings, transport UDP or All. Behind Docker or a firewall, publish `5027/udp` explicitly (a plain `-p 5027:5027` is TCP only).
+- **Teltonika protocol on port 5027 with UDP**: in Traccar 6, **Settings → Protocols** decides each protocol's port and transport (Disabled, TCP, UDP or All), stored in Traccar's database; `traccar.xml` (`protocols.enable`, `teltonika.port`) only seeds those settings the first time Traccar starts, so editing it later changes nothing. Set Teltonika to UDP or All. Behind Docker or a firewall, publish `5027/udp` explicitly (a plain `-p 5027:5027` is TCP only).
+- **Or the Freematics protocol** (what the stock firmware used, port 5170): `traccar_protocol: freematics` and `traccar_port: "5170"` switch the uplink to it, for checking a server with a protocol known to work. Traccar doesn't answer Freematics positions, so they count as delivered once sent (nothing is resent, and stored records leave the card), and each fix is about 90 bytes of text against 17; the uplink sends a login event, which Traccar does answer, and logs "Traccar answered the login".
 - **The device**: keep its existing identifier; `traccar_device_id` sends it with every packet. Nothing else to set on the device.
 - **`status.timeout`** (default 600 s): longer than the parked heartbeat, or a parked car flips to "unknown" between heartbeats. With the 15 minute heartbeat, 1200 or more.
 - **Leave `filter.outdated` off** (its default): parked heartbeats without a fix carry no position and would be dropped.

@@ -10,7 +10,8 @@
 # can keep its identifier).
 
 substitutions:
-  traccar_port: "5027"                # Traccar's Teltonika port (UDP)
+  traccar_protocol: teltonika         # or freematics: the stock firmware's text protocol, unacknowledged and about 4 times the data; for checking a server
+  traccar_port: "5027"                # Traccar's Teltonika port (UDP); 5170 for freematics
   traccar_send_interval: 60s          # batch fixes this long before sending (sooner on a stop or a full batch)
   traccar_moving_speed: "6"           # km/h: at or above, the car is moving
   traccar_moving_interval: 10s        # a fix at least this often while moving
@@ -21,6 +22,7 @@ substitutions:
 traccar_uplink:
   id: traccar
   host: ${traccar_host}
+  protocol: ${traccar_protocol}
   port: ${traccar_port}
   device_id: ${traccar_device_id}
   send_interval: ${traccar_send_interval}

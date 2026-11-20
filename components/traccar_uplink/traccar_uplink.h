@@ -18,6 +18,7 @@
 #endif
 
 #include "backlog.h"
+#include "freematics_text.h"
 #include "teltonika.h"
 #include "tracker.h"
 
@@ -43,6 +44,9 @@ class TraccarUplink final : public Component {
   void set_host(const std::string &host) { this->host_ = host; }
   void set_port(uint16_t port) { this->port_ = port; }
   void set_device_id(const std::string &id) { this->device_id_ = id; }
+  /// Traccar's Freematics text protocol instead of GH3000: unacknowledged, so
+  /// records count as delivered once sent; a login event checks the server answers.
+  void set_freematics_protocol(bool on) { this->freematics_ = on; }
   void set_send_interval(uint32_t ms) { this->send_interval_ = ms; }
   void set_ack_timeout(uint32_t ms) { this->ack_timeout_ = ms; }
   void set_max_queue(uint16_t n) { this->max_queue_ = n; }
@@ -76,6 +80,7 @@ class TraccarUplink final : public Component {
 
  protected:
   void enqueue_(const Record &record);
+  void send_freematics_(const struct sockaddr *addr, socklen_t addr_len);
   bool now_(uint32_t *unix);
   void receive_();
   void send_();
@@ -107,6 +112,9 @@ class TraccarUplink final : public Component {
   bool in_flight_{false};
   uint8_t in_flight_count_{0};
   uint8_t location_packet_id_{0};
+  bool freematics_{false};
+  bool login_answered_{false};
+  uint32_t last_login_{0};
   uint16_t packet_id_{0};
   uint8_t failures_{0};
   uint32_t sent_at_{0};
