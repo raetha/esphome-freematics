@@ -63,6 +63,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: Bench check of the altitude and writer-task build: the card's record file started afresh once (new format), the queue reports "Written by: a task of its own", and no "took a long time" warnings in 17 minutes; no false trip with 3 to 4 satellites indoors (the heartbeat came at 15 minutes as expected; one heartbeat's acknowledgement was lost and the resend was acknowledged). Into the car for the weekend.
+
 - 2026-11-20: Altitude on by default (`traccar_altitude`, GH3000's 2-byte field; an hour of driving 12.3 KB instead of 11.5); the record keeps its 28 bytes (the field fits the padding) but its layout changed, so `RECORD_FORMAT` is 2 and the card's file starts afresh once. `file_queue` writes from a task of its own (`writer_task`, `traccar_store_writer_task`): the loop queues pushes and pops (`pending_ops.h`, 32 changes deep, host-tested), the task applies them and syncs every 30 s, `read()` waits for it (only after more than 300 records wait). Goes into the car for the weekend.
 
 - 2026-11-20: Full review (docs/audits.md). The owner saw a trip start on the bench at a desk: the tracker started a trip on the first fix at 6 km/h, and a still receiver with 4 satellites indoors produces those, drifting tens of metres; in the car that would also have kept standby from ever sleeping (it waits for the tracker to stop). A trip now needs 3 fast fixes in a row and 50 m from the parked position (`traccar_start_fixes`, `traccar_start_distance`). Altitude isn't sent: GH3000 has a 2-byte altitude field, left out to save data; the owner's call. The "took a long time" warnings are SD card writes on the main loop (proposed: a writer task for `file_queue`).
