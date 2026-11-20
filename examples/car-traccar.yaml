@@ -3,7 +3,7 @@
 # Paste this whole file into a new device in ESPHome Device Builder, change the
 # substitutions below, and install. Everything else comes from GitHub.
 # Secrets it uses (Device Builder -> Secrets): wifi_ssid, wifi_password,
-# freematics_ota_password.
+# freematics_ota_password, freematics_api_key.
 
 substitutions:
   name: freematics-car1
@@ -35,8 +35,15 @@ wifi:
       password: !secret wifi_password
     # More networks: another - ssid: / password: pair.
 
-# Updates over the air while on Wi-Fi (a firmware is about 1 MB of LTE data);
-# logs over USB.
+# Updates and logs over the air from ESPHome Device Builder, while the device is
+# on Wi-Fi. On LTE the carrier's NAT keeps it unreachable, so neither uses data.
 ota:
   - platform: esphome
     password: !secret freematics_ota_password
+
+# Only so Device Builder can show logs: nothing connects unless a log window is
+# open. Ignore the device if Home Assistant offers to add it.
+api:
+  encryption:
+    key: !secret freematics_api_key   # 32 random bytes, base64 (Device Builder's new-device wizard makes one)
+  reboot_timeout: 0s                  # never restart for want of a connection
