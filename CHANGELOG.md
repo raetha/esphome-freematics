@@ -26,6 +26,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - `scripts/traccar_check.py`: checks from any computer that a Traccar server answers the dongle's packets (port forwarding, device ID). `--protocol freematics` checks the Freematics port instead.
 - The Traccar uplink can use Traccar's Freematics protocol, the one the stock firmware used (`traccar_protocol: freematics`, `traccar_port: "5170"`), to check a server with a protocol known to work: no acknowledgements and about four times the data, so not for everyday use.
 - A bench probe for the cellular module (`examples/bench-modem-probe.yaml`): presses the power key and sends `AT` as Freematics' own library does, and logs everything the module answers, without ESPHome's modem component and without using data.
+- A bench test of ESPHome's modem component on its own (`examples/bench-modem-esphome.yaml`): the board package's power-key presses and modem settings with nothing else running, to find out whether something else in the full configuration keeps the modem from answering.
 - The Traccar configuration shows its logs in ESPHome Device Builder over Wi-Fi, next to over-the-air updates, without connecting to Home Assistant or using cellular data. It needs a `freematics_api_key` secret.
 - Over-the-air updates are encrypted with the device's API key; the separate OTA password secret is gone.
 
