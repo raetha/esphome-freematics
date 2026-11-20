@@ -4,3 +4,4 @@
 #include "record_queue.h"
 #include "teltonika.h"
 #include "tracker.h"
+#include "link_parse.h"

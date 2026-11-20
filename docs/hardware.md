@@ -37,7 +37,7 @@ From `FreematicsPlus.cpp` and `FreematicsOBD.cpp`. Each ends in `\r`.
 
 ## Vehicle bus: passive only
 
-The project sends nothing to the vehicle: no OBD requests (`ATZ`/`ATSP` set-up, mode 01/09 PIDs), no writes, no clearing codes. Requests and writes are the likely reason cars complained about the stock firmware. The commands the packages use (`ATI`, `ATRV`, `ATGPSON`, `ATGPS`, `ATGRR`) are answered by the co-processor itself (its version, its own voltage reading, its GNSS) and don't touch the bus.
+The project sends nothing to the vehicle: no OBD requests (`ATZ`/`ATSP` set-up, mode 01/09 PIDs), no writes, no clearing codes. Requests and writes are the likely reason cars complained about the stock firmware. The commands the packages use (`ATI`, `ATRV`, `ATGPSON`, `ATGPS`) are answered by the co-processor itself (its version, its own voltage reading, its GNSS) and don't touch the bus. The `freematics_link` component can send only those four: its command set is a fixed enum, with no way to pass other text through.
 
 What passive reading can get is open: the library has a CAN monitoring mode (`ATM1`, used by the `can_sniffer` example) that listens to broadcast frames, but many cars put a gateway between the OBD port and their internal buses, so there may be little to hear. Unknown too: whether the co-processor's own firmware probes the bus by itself at power-up. Phase 4 finds out on each car.
 

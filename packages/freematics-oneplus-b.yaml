@@ -12,7 +12,8 @@ substitutions:
   modem_model: SIM7070          # SIM7070G in the owner's dongles; SIM7600 also works
   modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
-  coproc_log_level: INFO        # DEBUG logs every co-processor exchange
+  coproc_log_level: DEBUG       # VERBOSE also logs every GNSS reply (set logger_level: VERBOSE too)
+  logger_level: DEBUG
 
 esphome:
   name: ${name}
@@ -21,17 +22,9 @@ esphome:
     name: raetha.esphome-freematics
     version: "0.1.0"
   on_boot:
-    - priority: 800
-      then:
-        # Keep the STM32 co-processor out of reset (GPIO15, active low).
-        - output.turn_on: coproc_nreset
     - priority: -100
       then:
         - script.execute: modem_power_on
-    - priority: -200
-      then:
-        - delay: 3s
-        - uart.write: { id: coproc, data: "ATGPSON\r" }
 
 esp32:
   board: esp32dev
@@ -40,10 +33,10 @@ esp32:
     type: esp-idf
 
 logger:
-  level: DEBUG
+  level: ${logger_level}
   baud_rate: 115200
   logs:
-    uart_debug: ${coproc_log_level}
+    freematics_link: ${coproc_log_level}
 
 time:
   - platform: sntp
@@ -73,11 +66,6 @@ output:
   - platform: gpio
     id: modem_pwrkey
     pin: GPIO27
-  - platform: gpio
-    id: coproc_nreset
-    pin:
-      number: GPIO15
-      ignore_strapping_warning: true
 
 script:
   # Press PWRKEY for 200 ms, as the Freematics library does, until the module
@@ -103,10 +91,7 @@ globals:
   - id: modem_synced
     type: bool
     initial_value: "false"
-  # The latest GNSS fix, filled from ATGPS replies (see uart below)
-  - id: gnss_valid
-    type: bool
-    initial_value: "false"
+  # The latest GNSS fix, filled by freematics_link's on_fix (below)
   - id: gnss_date        # ddmmyy, UTC
     type: uint32_t
     initial_value: "0"
@@ -146,54 +131,33 @@ sensor:
       - multiply: 11.0   # 100k/10k divider; calibrate against a meter
 
 # ---------- Co-processor link (STM32F103: OBD and the internal GNSS) ----------
-# Only reads: ATGPS for the GNSS and, from buttons, ATI and ATRV, which the
-# co-processor answers itself. Nothing here sends to the vehicle bus.
-# Stopgap until the freematics_link component.
+# freematics_link sends only ATI, ATRV, ATGPSON and ATGPS, all answered by the
+# co-processor itself: nothing reaches the vehicle bus. The device config loads
+# the component (external_components: components: [freematics_link, ...]).
+
 uart:
   - id: coproc
     rx_pin: GPIO13
     tx_pin: GPIO14
     baud_rate: 115200
-    rx_buffer_size: 1024
-    debug:
-      direction: BOTH
-      dummy_receiver: true
-      after:
-        delimiter: "\r"
-      sequence:
-        - lambda: |-
-            UARTDebug::log_string(direction, bytes);
-            if (direction != uart::UART_DIRECTION_RX) return;
-            // Reply to ATGPS, per FreematicsPlus.cpp gpsGetData():
-            // GNIFO,date,time,lat*1e6,lng*1e6,alt*100,speed(knots)*100,heading*100,sats,hdop
-            std::string s(bytes.begin(), bytes.end());
-            auto p = s.find("\x24GNIFO,");  // the dollar sign spelled out: ESPHome reads it as a substitution
-            if (p == std::string::npos) return;
-            long v[9] = {0};
-            int n = 0;
-            const char *c = s.c_str() + p + 7;
-            while (n < 9 && *c) {
-              v[n++] = atol(c);
-              const char *q = strchr(c, ',');
-              if (q == nullptr) break;
-              c = q + 1;
-            }
-            if (n < 4 || (v[2] == 0 && v[3] == 0)) {
-              id(gnss_valid) = false;
-              return;
-            }
-            id(gnss_valid) = true;
-            id(gnss_date) = v[0];
-            id(gnss_time) = v[1];
-            id(gnss_lat) = v[2] / 1e6f;
-            id(gnss_lon) = v[3] / 1e6f;
-            id(gnss_kmh) = n > 5 ? v[5] / 100.0f * 1.852f : 0;
-            id(gnss_course) = n > 6 ? v[6] / 100.0f : 0;
-            id(gnss_sats) = n > 7 ? v[7] : 0;
-            id(gnss_hdop) = n > 8 ? v[8] : 0;
-            id(on_gnss_fix).execute();
+    rx_buffer_size: 512
 
-interval:
-  - interval: ${gnss_poll_interval}
-    then:
-      - uart.write: { id: coproc, data: "ATGPS\r" }
+freematics_link:
+  id: link
+  uart_id: coproc
+  reset_pin:
+    number: GPIO15
+    ignore_strapping_warning: true
+  gnss_interval: ${gnss_poll_interval}
+  battery_interval: 0s               # the ADC reads battery voltage; ATRV is the alternative
+  on_fix:
+    - lambda: |-
+        id(gnss_date) = fix.date;
+        id(gnss_time) = fix.time;
+        id(gnss_lat) = fix.latitude;
+        id(gnss_lon) = fix.longitude;
+        id(gnss_kmh) = std::isnan(fix.speed_kmh) ? 0 : fix.speed_kmh;
+        id(gnss_course) = std::isnan(fix.course_deg) ? 0 : fix.course_deg;
+        id(gnss_sats) = fix.satellites;
+        id(gnss_hdop) = fix.hdop;
+        id(on_gnss_fix).execute();

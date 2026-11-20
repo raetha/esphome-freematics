@@ -83,11 +83,14 @@ text_sensor:
   - platform: debug
     reset_reason:
       name: Reset reason
+  - platform: freematics_link
+    version:
+      name: Co-processor version
 
 binary_sensor:
-  - platform: template
-    name: GNSS fix
-    lambda: return id(gnss_valid);
+  - platform: freematics_link
+    fix:
+      name: GNSS fix
   - platform: template
     name: Cellular connected
     device_class: connectivity
@@ -96,19 +99,9 @@ binary_sensor:
 button:
   - platform: restart
     name: Restart
-  # Answers appear in the device log (set coproc_log_level: DEBUG to see the co-processor's)
+  # The answer appears in the device log
   - platform: template
     name: "Modem: serving cell (AT+CPSI?)"
     entity_category: diagnostic
     on_press:
       - modem.send_at: "AT+CPSI?"
-  - platform: template
-    name: "Co-proc: identify (ATI)"
-    entity_category: diagnostic
-    on_press:
-      - uart.write: { id: coproc, data: "ATI\r" }
-  - platform: template
-    name: "Co-proc: battery (ATRV)"
-    entity_category: diagnostic
-    on_press:
-      - uart.write: { id: coproc, data: "ATRV\r" }

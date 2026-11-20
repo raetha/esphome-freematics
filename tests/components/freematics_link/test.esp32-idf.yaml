@@ -1,0 +1,69 @@
+# ESPHome-style component test: every option and platform of freematics_link,
+# compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
+esphome:
+  name: test-freematics-link
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [freematics_link]
+
+uart:
+  - id: coproc
+    rx_pin: GPIO13
+    tx_pin: GPIO14
+    baud_rate: 115200
+
+freematics_link:
+  id: link
+  uart_id: coproc
+  reset_pin:
+    number: GPIO15
+    ignore_strapping_warning: true
+  gnss_interval: 2s
+  battery_interval: 60s
+  on_fix:
+    - logger.log:
+        format: "Fix %.6f,%.6f at %u"
+        args: [fix.latitude, fix.longitude, fix.epoch]
+
+sensor:
+  - platform: freematics_link
+    latitude:
+      name: Latitude
+    longitude:
+      name: Longitude
+    altitude:
+      name: Altitude
+    speed:
+      name: Speed
+    course:
+      name: Course
+    satellites:
+      name: Satellites
+    hdop:
+      name: HDOP
+    battery_voltage:
+      name: Battery voltage
+
+binary_sensor:
+  - platform: freematics_link
+    fix:
+      name: GNSS fix
+
+text_sensor:
+  - platform: freematics_link
+    version:
+      name: Co-processor version
+
+time:
+  - platform: freematics_link
+    id: gnss_clock

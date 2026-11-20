@@ -46,7 +46,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 | Component | Does | Status |
 | --- | --- | --- |
 | `traccar_uplink` | Tracking filter (moving, turns, start, stop, heartbeat), in-memory queue, Teltonika GH3000 over UDP with acknowledgements, motion triggers | Built (phase 1) |
-| `freematics_link` | Owns the co-processor UART; GNSS fixes and time; battery voltage; later passive vehicle data | Phase 2 |
+| `freematics_link` | Owns the co-processor UART: reset, `ATI` version, `ATGPSON`, `ATGPS` polling into fixes, sensors and a time source, `ATRV` battery voltage; later passive vehicle data | Built on `try/freematics-link`, not merged: waits for phase 1 on hardware |
 | SD-backed queue | Records survive reboots and long outages | Phase 3 |
 
 ## Open questions
@@ -59,7 +59,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
-- 2026-11-19: First bench test (0.1.0-dev.3, powered from a computer's USB port): Wi-Fi failed with "Auth Expired" on every access point, the modem didn't answer its first two PWRKEY presses, and the co-processor answered no `ATGPS` in the 20 seconds logged. Likely too little power. The Traccar example now has the native API (no Home Assistant, `reboot_timeout: 0s`) so Device Builder shows logs over Wi-Fi; the next test runs the same code from a wall charger, before `freematics_link` and the SD card go in.
+- 2026-11-19: Second bench test on a 2 A charger, logs over Wi-Fi: Wi-Fi connected, SNTP synced and the uplink sent a heartbeat (27 bytes), so the first test's Wi-Fi failure was power. The co-processor still answered no `ATGPS` and the modem no AT command. Merged `freematics_link` (phase 2) into `dev` in place of the UART lambda: it resets the co-processor, identifies it with `ATI` and logs what came back when a reply is missing.
+- 2026-11-19: First bench test (0.1.0-dev.3, powered from a computer's USB port): Wi-Fi failed with "Auth Expired" on every access point, the modem didn't answer its first two PWRKEY presses, and the co-processor answered no `ATGPS` in the 20 seconds logged. The Traccar example gained the native API (no Home Assistant, `reboot_timeout: 0s`) so Device Builder shows logs over Wi-Fi.
 
 - 2026-11-19: Adopted ESPHome's component rules as a checklist (no quality scale exists); `traccar_uplink` now allocates its queue and buffers once at startup, uses loop time, and has a component test config; clang-format and clang-tidy in CI.
 - 2026-11-19: Repository public; CI automatic again. Examples fetch everything from GitHub so they can be pasted into ESPHome Device Builder; CI builds them from the checkout (`scripts/localize.py`).
