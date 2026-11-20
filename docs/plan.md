@@ -61,6 +61,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: Beeps as the stock firmware (`telelogger.ino`): 50 ms at 2 kHz on GPIO25 when Wi-Fi or cellular comes up, plus 200 ms at start-up so a running device can be heard in the car; `beep_on_boot` and `beep_on_network` turn them off.
+
 - 2026-11-20: Traccar answers: the cause was a firewall rule on the owner's side. 0.1.0-dev.11 on the bench sent a record over Wi-Fi and Traccar acknowledged it within 90 ms, with the record kept on the SD card until then. Still open: the modem never answers (on the car's power next), and ESPHome still warns about the occasional 55 to 60 ms SD write (`traccar_uplink` queuing at boot, `file_queue`'s 30-second sync); a sync on its own task would remove that if it matters.
 
 - 2026-11-20: At home the device reaches Traccar through local DNS on the internal address, with no port forwarding, and still gets no answer, so the problem is Traccar's side. Found while testing locally: Traccar 6 keeps protocol ports and transports in its database (Settings → Protocols), and `traccar.xml` only seeds them on first start. Added `traccar_protocol: freematics` (port 5170, the stock firmware's protocol) as a check, verified against Traccar 6.17.0: positions decoded, login answered.

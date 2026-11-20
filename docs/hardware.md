@@ -14,7 +14,7 @@ Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](http
 | Battery voltage | GPIO36 (ADC) | 100k/10k divider: × 11, then calibrate. `ATRV` on the co-processor is the alternative |
 | microSD (SPI) | CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23 | |
 | IMU (I2C) | SDA GPIO21, SCL GPIO22 | MPU9250 on r14; ICM-20948 per the product page (unconfirmed) |
-| Buzzer, LED | GPIO25, GPIO4 | |
+| Buzzer, LED | GPIO25, GPIO4 | The stock firmware drives the buzzer at 2 kHz (LEDC) and beeps 50 ms when it reaches its server over Wi-Fi or once cellular is in service (`telelogger.ino`); the board package does the same, plus 200 ms at start-up |
 | USB serial | CP2102 on UART0 | Flashing and logs |
 | Flash | 16 MB | PSRAM: unconfirmed |
 

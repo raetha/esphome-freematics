@@ -13,6 +13,11 @@ wifi:
   on_connect:
     - if:
         condition:
+          lambda: return ${beep_on_network};
+        then:
+          - script.execute: { id: beep, ms: 50 }
+    - if:
+        condition:
           lambda: return !${lte_on_wifi};
         then:
           - logger.log: "Wi-Fi up: turning LTE off"

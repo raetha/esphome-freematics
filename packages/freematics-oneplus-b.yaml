@@ -12,6 +12,8 @@ substitutions:
   modem_model: SIM7070          # SIM7070G in the owner's dongles; SIM7600 also works
   modem_rx_pin: GPIO35          # the library uses GPIO32/GPIO33 instead with co-processor version 13
   modem_tx_pin: GPIO2
+  beep_on_boot: "true"          # a 200 ms beep when the firmware has started
+  beep_on_network: "true"       # a 50 ms beep when Wi-Fi or cellular comes up, as the stock firmware does
   modem_pwrkey_press: 200ms     # the Freematics library's press
   modem_pwrkey_tries: "5"       # presses until the module answers
   modem_pwrkey_wait: 10s        # between presses; longer with a long press, which can switch a started module off
@@ -31,6 +33,11 @@ esphome:
     - priority: -100
       then:
         - script.execute: modem_power_on
+        - if:
+            condition:
+              lambda: return ${beep_on_boot};
+            then:
+              - script.execute: { id: beep, ms: 200 }
 
 esp32:
   board: esp32dev
@@ -74,6 +81,11 @@ modem:
     - globals.set: { id: modem_synced, value: "true" }
   on_connect:
     - logger.log: "Cellular: PPP up"
+    - if:
+        condition:
+          lambda: return ${beep_on_network};
+        then:
+          - script.execute: { id: beep, ms: 50 }
   on_disconnect:
     - logger.log: "Cellular: PPP down"
 
@@ -81,8 +93,23 @@ output:
   - platform: gpio
     id: modem_pwrkey
     pin: GPIO27
+  # The buzzer, driven at 2 kHz like the stock firmware's beep()
+  - platform: ledc
+    id: buzzer
+    pin: GPIO25
+    frequency: 2000Hz
 
 script:
+  # A beep of ms milliseconds; beeps asked for together play one after another.
+  - id: beep
+    mode: queued
+    parameters:
+      ms: int
+    then:
+      - output.set_level: { id: buzzer, level: 50% }
+      - delay: !lambda return ms;
+      - output.turn_off: buzzer
+      - delay: 150ms
   # Press PWRKEY (200 ms, as the Freematics library does) until the module
   # answers (a short press doesn't power off a module that's already on).
   # packages/wifi-first.yaml turns LTE off again if Wi-Fi is already up.
