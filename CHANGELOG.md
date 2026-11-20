@@ -19,12 +19,14 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - Nothing is sent to the vehicle bus: only commands the co-processor answers itself.
 - The example configs are complete on their own: paste one into ESPHome Device Builder, set a few substitutions and secrets, and build; the packages and the component come from GitHub.
 - The Traccar server settings the configuration needs (docs/configurations.md).
+- `scripts/traccar_check.py`: checks from any computer that a Traccar server answers the dongle's packets (port forwarding, device ID).
 - A bench probe for the cellular module (`examples/bench-modem-probe.yaml`): presses the power key and sends `AT` as Freematics' own library does, and logs everything the module answers, without ESPHome's modem component and without using data.
 - The Traccar configuration shows its logs in ESPHome Device Builder over Wi-Fi, next to over-the-air updates, without connecting to Home Assistant or using cellular data. It needs a `freematics_api_key` secret.
 - Over-the-air updates are encrypted with the device's API key; the separate OTA password secret is gone.
 
 ### Internal
 
+- The Teltonika encoder is checked against a real Traccar server (`tests/test_traccar_server.py`, run when `TRACCAR_UDP` is set).
 - Components follow ESPHome's own rules for components (clang-format, clang-tidy, no memory allocation while running, a component test config), checked in CI.
 - Repository workflow: `dev`/`main` branches, changelog checks, `esphome config` and `esphome compile` of the example in CI, test builds as pre-release tags, Dependabot.
 

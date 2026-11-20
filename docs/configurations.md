@@ -43,7 +43,9 @@ All of these are substitutions in `packages/uplink-traccar.yaml`; a device confi
 - **Leave `filter.outdated` off** (its default): parked heartbeats without a fix carry no position and would be dropped.
 - **`filter.duplicate`** only catches a repeat of the latest position, so it doesn't help with the rare batch Traccar stores twice (when its acknowledgement is lost). Leave it as you have it.
 - **Trips**: the defaults suit this (motion from speed; a trip ends after `report.trip.minimalParkingDuration`, 300 s, parked).
-- **Checking**: `tracker-server.log` shows the Teltonika packets and "Unknown device" if the identifier doesn't match.
+- **A name that isn't proxied**: Cloudflare's proxy (the orange cloud) and Cloudflare Tunnel carry web traffic only, not UDP, so a proxied name gives the dongle Cloudflare's address and its packets go nowhere. Use a DNS-only record (grey cloud) for the dongle, pointing at the home address, even if the web interface stays proxied under another name.
+- **Checking**: `tracker-server.log` shows the Teltonika packets and "Unknown device" if the identifier doesn't match (Traccar doesn't answer unknown devices). From any computer outside the home network (a phone's hotspot), `python3 scripts/traccar_check.py <host> <device id>` sends one time-only record the way the dongle does and says whether Traccar answered.
+- **Verified**: the encoder's packets (a time-only record, a fix, a full batch of 40) were checked against Traccar 6.17.0 itself, which decoded them and answered with the acknowledgement the uplink expects (`tests/test_traccar_server.py`).
 
 ## Home Assistant
 
