@@ -362,3 +362,53 @@ def test_backlog_carries_on_in_memory_when_the_store_fails(backlog):
         "size 3 memory 2 3 5",
         "size 2 memory 3 5",
     ]
+
+
+# Traccar's Freematics text protocol, read the way FreematicsProtocolDecoder does.
+
+
+def decode_freematics(sentence: str) -> tuple[str, list[dict]]:
+    start, end = sentence.index("#"), sentence.index("*")
+    body = sentence[start + 1 : end]
+    assert f"{int(sentence[end + 1 :], 16):02X}" == sentence[end + 1 :]
+    assert sum(sentence[:end].encode()) % 256 == int(sentence[end + 1 :], 16)
+    positions: list[dict] = []
+    for pair in body.split(","):
+        key, value = pair.split(":", 1)
+        key = int(key, 16)
+        if key == 0:
+            positions.append({})
+            continue
+        positions[-1][key] = value
+    return sentence[:start], positions
+
+
+FIX = "1800000000 1 43.81835 -72.2788 52.5 270 12 12600 -1"
+TIME_ONLY = "1800000010 0 0 0 0 0 0 0 0"
+
+
+def test_freematics_positions(cli):
+    (out,) = cli(f"freematics car1 1024 2\n{FIX}\n{TIME_ONLY}\n")
+    device, positions = decode_freematics(out)
+    assert device == "car1"
+    first, second = positions
+    # 1800000000 is 2027-01-15 08:00:00 UTC
+    assert first[0x11] == "150127" and first[0x10] == "08000000"
+    assert float(first[0xA]) == pytest.approx(43.81835, abs=1e-5)
+    assert float(first[0xB]) == pytest.approx(-72.2788, abs=1e-5)
+    assert first[0xD] == "53" and first[0xE] == "270" and first[0xF] == "12"
+    assert first[0x24] == "1260"  # V x 100: Traccar shows 12.6
+    # A time-only record carries no position: Traccar keeps the last one.
+    assert second == {0x11: "150127", 0x10: "08001000"}
+
+
+def test_freematics_doesnt_fit(cli):
+    assert cli(f"freematics car1 60 2\n{FIX}\n{TIME_ONLY}\n") == ["-"]
+    (one,) = cli(f"freematics car1 120 1\n{FIX}\n")
+    assert one != "-" and len(one) < 120
+
+
+def test_freematics_login(cli):
+    assert cli("login car1 1234\n") == ["car1#EV=1,TS=1234,ID=car1*CA"]
+    assert cli("loginreply 1#EV=1,RX=1,TS=1234*7B\n") == ["1"]
+    assert cli("loginreply 1#EV=2,RX=1\n") == ["0"]

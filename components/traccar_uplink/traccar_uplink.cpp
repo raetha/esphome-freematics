@@ -34,16 +34,17 @@ void TraccarUplink::setup() {
 void TraccarUplink::dump_config() {
   const TrackerConfig &c = this->tracker_.config();
   ESP_LOGCONFIG(TAG,
-                "Traccar uplink (Teltonika GH3000 over UDP):\n"
+                "Traccar uplink (%s over UDP):\n"
                 "  Server: %s:%u\n"
                 "  Device ID: %s\n"
                 "  Send interval: %" PRIu32 " s, ack timeout %" PRIu32 " s\n"
                 "  Queue: %u records, up to %u per packet\n"
                 "  Moving at %.0f km/h, a record every %" PRIu32 " s or on a %.0f deg turn\n"
                 "  Stopped after %" PRIu32 " s below that; heartbeat every %" PRIu32 " s",
-                this->host_.c_str(), this->port_, this->device_id_.c_str(), this->send_interval_ / 1000,
-                this->ack_timeout_ / 1000, this->max_queue_, this->batch_max_, c.moving_speed_kmh, c.moving_interval_s,
-                c.turn_angle_deg, c.stop_delay_s, c.heartbeat_s);
+                this->freematics_ ? "Freematics text, unacknowledged" : "Teltonika GH3000", this->host_.c_str(),
+                this->port_, this->device_id_.c_str(), this->send_interval_ / 1000, this->ack_timeout_ / 1000,
+                this->max_queue_, this->batch_max_, c.moving_speed_kmh, c.moving_interval_s, c.turn_angle_deg,
+                c.stop_delay_s, c.heartbeat_s);
 #ifdef USE_FILE_QUEUE
   if (this->store_ != nullptr)
     ESP_LOGCONFIG(TAG, "  Records kept on file until acknowledged (%s)",
@@ -139,7 +140,7 @@ void TraccarUplink::enqueue_(const Record &record) {
 }
 
 void TraccarUplink::receive_() {
-  uint8_t buf[16];
+  uint8_t buf[32];
   for (int i = 0; i < 4; i++) {
     ssize_t len = this->socket_->recvfrom(buf, sizeof(buf), nullptr, nullptr);
     if (len <= 0)
@@ -147,6 +148,17 @@ void TraccarUplink::receive_() {
     char hex[3 * sizeof(buf) + 1] = {};
     for (ssize_t j = 0; j < len && j < (ssize_t) sizeof(buf); j++)
       snprintf(hex + 3 * j, 4, "%02X ", buf[j]);
+    if (this->freematics_) {
+      if (::trackcodec::is_freematics_login_reply(buf, len)) {
+        if (!this->login_answered_)
+          ESP_LOGI(TAG, "Traccar answered the login: the server is reachable");
+        this->login_answered_ = true;
+        this->last_ack_at_ = now_ms() | 1;
+      } else {
+        ESP_LOGD(TAG, "Reply: %s", hex);
+      }
+      continue;
+    }
     if (!this->in_flight_) {
       ESP_LOGD(TAG, "Reply with nothing waiting for one: %s", hex);
       continue;
@@ -182,6 +194,12 @@ void TraccarUplink::send_() {
       this->resolver_.start(this->host_.c_str(), this->port_, TAG);
     return;
   }
+  if (this->freematics_) {
+    struct sockaddr_storage addr;
+    socklen_t addr_len = this->resolver_.to_sockaddr((struct sockaddr *) &addr, sizeof(addr), this->port_);
+    this->send_freematics_((struct sockaddr *) &addr, addr_len);
+    return;
+  }
   size_t count = std::min<size_t>(this->backlog_.memory().size(), this->batch_max_);
   this->backlog_.memory().copy(0, count, this->batch_.get());
   size_t len = 0;
@@ -211,6 +229,42 @@ void TraccarUplink::send_() {
   this->last_send_ = now_ms();
   this->flush_requested_ = false;
   ESP_LOGD(TAG, "Sent %u records in %u bytes", (unsigned) count, (unsigned) len);
+}
+
+void TraccarUplink::send_freematics_(const struct sockaddr *addr, socklen_t addr_len) {
+  uint32_t now = now_ms();
+  char *out = reinterpret_cast<char *>(this->buf_);
+  // A login until Traccar answers one (then every hour), to show it's listening.
+  if (!this->login_answered_ ? now - this->last_login_ >= 60000 || this->last_login_ == 0
+                             : now - this->last_login_ >= 3600000) {
+    size_t len = ::trackcodec::encode_freematics_login(out, sizeof(this->buf_), this->device_id_.c_str(), now);
+    if (len != 0 && this->socket_->sendto(out, len, 0, addr, addr_len) == (ssize_t) len) {
+      this->bytes_sent_ += len;
+      ESP_LOGD(TAG, "Sent a login (%u bytes)", (unsigned) len);
+    }
+    this->last_login_ = now | 1;
+  }
+  size_t count = std::min<size_t>(this->backlog_.memory().size(), this->batch_max_);
+  this->backlog_.memory().copy(0, count, this->batch_.get());
+  size_t len = 0;
+  while (count > 0 && (len = ::trackcodec::encode_freematics(out, sizeof(this->buf_), this->device_id_.c_str(),
+                                                             this->batch_.get(), count)) == 0)
+    count--;
+  this->last_send_ = now;
+  this->flush_requested_ = false;
+  if (len == 0) {
+    ESP_LOGE(TAG, "Could not encode a packet (device ID too long?)");
+    return;
+  }
+  if (this->socket_->sendto(out, len, 0, addr, addr_len) != (ssize_t) len) {
+    ESP_LOGW(TAG, "Send failed (errno %d); trying again at the next send interval", errno);
+    return;
+  }
+  // Nothing comes back for positions: once sent, they count as delivered.
+  this->backlog_.acknowledged(count);
+  this->records_sent_ += count;
+  this->bytes_sent_ += len;
+  ESP_LOGD(TAG, "Sent %u records in %u bytes (Freematics, unacknowledged)", (unsigned) count, (unsigned) len);
 }
 
 void TraccarUplink::loop() {

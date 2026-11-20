@@ -46,6 +46,15 @@ The normal config, after test 1 passes (with the new `traccar_host` if it change
 
 **Send back:** two minutes of log from boot. In Traccar, the device should show a position.
 
+**If nothing answers**, check Traccar's **Settings → Protocols**: Teltonika on port 5027 with transport UDP or All (Traccar 6 keeps these in its database; the config file only sets them the first time). Then, to tell Traccar from the network, switch to the protocol the stock firmware used:
+
+```yaml
+  traccar_protocol: freematics
+  traccar_port: "5170"
+```
+
+and look for `Traccar answered the login: the server is reachable`. From a computer, `python3 scripts/traccar_check.py <host> test --protocol freematics` does the same. Switch back once Teltonika answers: Freematics positions get no acknowledgement and use about four times the data.
+
 ## 3. Does the cellular module answer at all?
 
 Paste [examples/bench-modem-probe.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-modem-probe.yaml) over the config (it uses the same name and secrets), install, and leave the logs open for three minutes. It presses the power key and sends `AT` the way Freematics' library does: tries 1 to 12 with a 200 ms press, 13 to 24 with 1 s, 25 to 36 with 1.5 s. Uses no cellular data.

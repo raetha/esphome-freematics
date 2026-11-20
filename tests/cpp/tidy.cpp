@@ -8,3 +8,4 @@
 #include "backlog.h"
 #include "ring_file.h"
 #include "log_line.h"
+#include "freematics_text.h"
