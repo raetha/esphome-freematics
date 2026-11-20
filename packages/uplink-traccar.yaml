@@ -17,7 +17,7 @@ substitutions:
   traccar_turn_angle: "30"            # degrees: a turn this sharp records a fix early
   traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
   traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
-  traccar_stored_records: "50000"     # records kept on the SD card until Traccar has them (about 28 bytes each)
+  traccar_stored_records: "50000"     # records kept on the SD card until Traccar has them (32 bytes each: 50,000 is 1.6 MB)
 
 # Every record stays on the SD card until Traccar acknowledges it, so a reboot or
 # a long time without coverage loses nothing. Without a card, memory holds 300.
