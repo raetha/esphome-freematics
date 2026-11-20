@@ -12,7 +12,8 @@
 | `docs/hardware.md`, `docs/networking.md` | Hardware facts and sources; Wi-Fi/LTE/WireGuard and data use |
 | `docs/backlog.md`, `docs/audits.md` | Ideas set aside; review records |
 | `scripts/release.py`, `scripts/markdown.py`, `scripts/localize.py` | CI's changelog, version, test build and release-notes helpers; the Markdown line check; an example rewritten to use this checkout |
-| `tests/` | Tests for the scripts and workflows, and `test_traccar_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder |
+| `tests/` | Tests for the scripts and workflows, and `test_traccar_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder, the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
+| `.clang-format`, `.clang-tidy` | ESPHome's C++ rules, copied from esphome/esphome |
 
 ## Setup and testing
 
@@ -21,6 +22,8 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
 pytest tests/
 ruff check scripts/ tests/ components/ && ruff format --check scripts/ tests/ components/
+clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cpp' 'tests/cpp/*.cpp')
+clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
 python3 scripts/localize.py examples/car-traccar.yaml build/local   # the example, using this checkout
@@ -32,6 +35,22 @@ esphome compile build/local/car-traccar.yaml              # first run downloads 
 Claude sessions can run everything but the compile (the session proxy blocks dl.espressif.com); CI compiles when it's run. Lambdas are C++, so YAML with lambdas isn't done until a compile passes.
 
 Testing on hardware: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
+
+## Component checklist
+
+ESPHome has no quality scale like Home Assistant's. What it has are the [rules for components](https://developers.esphome.io/contributing/code/) in its developer docs, enforced by its CI, and a [layout for component tests](https://developers.esphome.io/architecture/ci/component_tests/). Every component here meets them, checked before it's merged:
+
+- [ ] **Style:** ESPHome's `.clang-format` and `.clang-tidy` (copied to the repository root; CI runs both, clang-tidy on the plain C++ headers through `tests/cpp/tidy.cpp`), and ruff for the Python.
+- [ ] **Python:** `DOMAIN` matching the folder name; `CONF_` constants for keys; optional settings optional, with defaults that match the docs; actions that take a bare ID where that's natural (`traccar_uplink.flush: traccar`).
+- [ ] **No blocking:** nothing in `setup()` or `loop()` waits longer than a few milliseconds; network lookups are asynchronous.
+- [ ] **No heap allocation after `setup()`:** queues and buffers are sized from the configuration and allocated once.
+- [ ] **Timing** from `App.get_loop_component_start_time()`, not `millis()`.
+- [ ] **Classes** `final` unless something derives from them; members `protected`, ending in `_`, used as `this->member_`.
+- [ ] **`dump_config()`** prints the configuration, nothing that changes at run time.
+- [ ] **Host tests** for the logic that doesn't need ESPHome (encoders, filters, queues), kept in plain headers with no ESPHome dependencies, built with g++ by `pytest` (`tests/cpp/`).
+- [ ] **A component test config,** `tests/components/<component>/test.esp32-idf.yaml`, using every option and automation; CI compiles it.
+- [ ] **Docs:** its options and behavior in the docs here, and a changelog line.
+- [ ] **For this project:** its data use weighed and written down, and nothing sent to the vehicle bus.
 
 ## Vehicle safety
 
@@ -84,8 +103,8 @@ No tags are pushed by hand. CI refuses a pull request into `main` whose version 
 `.github/workflows/build.yml`, on every push and pull request (and by hand from the Actions tab):
 
 - `scripts/release.py check`: `CHANGELOG.md` has `[Unreleased]`; into and on `main`, also a dated section for the package's version; released sections match `main`'s.
-- The Markdown line check, ruff, and `pytest tests/` (including the host build of the Traccar uplink's encoder and filter).
-- `esphome config` and `esphome compile` on every example, rewritten by `scripts/localize.py` to use the checkout rather than GitHub, with the ESP-IDF toolchain cached per ESPHome version.
+- The Markdown line check, ruff, clang-format and clang-tidy, and `pytest tests/` (including the host build of the Traccar uplink's plain C++).
+- `esphome config` and `esphome compile` on every example, rewritten by `scripts/localize.py` to use the checkout rather than GitHub, and on every component test in `tests/components/`, with the ESP-IDF toolchain cached per ESPHome version.
 - `CI passed`: a gate job that passes only when every check above did, the one status check a `main` ruleset would require.
 
 Then, on `main`, the release and sync-dev jobs; on `dev`, the test build. Every checkout uses `persist-credentials: false` except sync-dev's, the one job that pushes. `tests/test_workflows.py` checks permissions on every job, actions pinned to commit SHAs, no `${{ }}` inside `run:` scripts, credentials dropped, and `CI passed` depending on every check job.

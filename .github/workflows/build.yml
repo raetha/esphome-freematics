@@ -2,9 +2,10 @@ name: Build
 
 # Branches (docs/development.md -> "Branches and releases"): work lands on `dev`, and each
 # release is one squash-merged pull request from `dev` into `main`.
-# Each run: changelog and Markdown checks, ruff, the tests (including a host build of the Traccar
-# uplink's encoder and filter), and `esphome config` + `esphome compile` of every example,
-# built from this checkout (scripts/localize.py).
+# Each run: changelog and Markdown checks, ruff, clang-format and clang-tidy with ESPHome's rules,
+# the tests (including a host build of the Traccar uplink's plain C++), and `esphome config` +
+# `esphome compile` of every example (built from this checkout, scripts/localize.py) and of
+# every component test in tests/components/.
 # Push to main: if the board package's version has no tag yet (and there's no DRAFT file), tag
 # it and publish the GitHub release with the changelog section as notes, delete the test
 # builds, then reset `dev` to `main` when everything on it was released.
@@ -74,6 +75,17 @@ jobs:
       - name: ruff format check
         run: ruff format --check scripts/ tests/ components/
 
+      # ESPHome's own C++ rules (.clang-format, .clang-tidy, copied from esphome/esphome).
+      - name: Install clang-format and clang-tidy (the versions pinned in requirements-dev.txt)
+        run: pip install "$(grep -E '^clang-format==' requirements-dev.txt | cut -d' ' -f1)" "$(grep -E '^clang-tidy==' requirements-dev.txt | cut -d' ' -f1)"
+
+      - name: clang-format check
+        run: clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cpp' 'tests/cpp/*.cpp')
+
+      # The ESPHome-facing files are checked by the firmware compile; the plain C++ headers here.
+      - name: clang-tidy on the plain C++ headers
+        run: clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink
+
   tests:
     name: Script and workflow tests
     runs-on: ubuntu-24.04
@@ -120,6 +132,7 @@ jobs:
           path: |
             ~/.cache/esphome
             build/local/.esphome
+            tests/components/*/.esphome
           key: esphome-${{ hashFiles('requirements-dev.txt') }}-${{ hashFiles('packages/**', 'components/**', 'examples/*.yaml') }}
           restore-keys: |
             esphome-${{ hashFiles('requirements-dev.txt') }}-
@@ -134,9 +147,9 @@ jobs:
           done
           cp examples/secrets.example.yaml build/local/secrets.yaml
 
-      - name: esphome config and compile every example
+      - name: esphome config and compile every example and component test
         run: |
-          for f in build/local/*.yaml; do
+          for f in build/local/*.yaml tests/components/*/test.*.yaml; do
             case "$f" in */secrets*) continue ;; esac
             esphome config "$f" > /dev/null
             echo "$f: valid"

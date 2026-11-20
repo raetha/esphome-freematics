@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include "esphome/core/hal.h"
+#include "esphome/core/application.h"
 #include "esphome/core/log.h"
 #include "esphome/components/network/util.h"
 
@@ -10,7 +10,22 @@ namespace esphome::traccar_uplink {
 
 static const char *const TAG = "traccar_uplink";
 
-void TraccarUplink::setup() { this->last_tick_ = millis(); }
+// Timing uses the loop's start time, as ESPHome asks of components.
+static uint32_t now_ms() { return App.get_loop_component_start_time(); }
+
+void TraccarUplink::setup() {
+  // Everything that needs memory is allocated here, once.
+  this->queue_.init(this->max_queue_);
+  this->batch_ = std::make_unique<Record[]>(this->batch_max_);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
+  this->socket_ = socket::socket_udp(AF_INET, IPPROTO_IP);
+  if (!this->socket_) {
+    ESP_LOGE(TAG, "Could not create a UDP socket");
+    this->mark_failed();
+    return;
+  }
+  this->socket_->setblocking(false);
+  this->last_tick_ = now_ms();
+}
 
 void TraccarUplink::dump_config() {
   const TrackerConfig &c = this->tracker_.config();
@@ -23,13 +38,13 @@ void TraccarUplink::dump_config() {
                 "  Moving at %.0f km/h, a record every %" PRIu32 " s or on a %.0f deg turn\n"
                 "  Stopped after %" PRIu32 " s below that; heartbeat every %" PRIu32 " s",
                 this->host_.c_str(), this->port_, this->device_id_.c_str(), this->send_interval_ / 1000,
-                this->ack_timeout_ / 1000, this->max_queue_, this->batch_max_, c.moving_speed_kmh,
-                c.moving_interval_s, c.turn_angle_deg, c.stop_delay_s, c.heartbeat_s);
+                this->ack_timeout_ / 1000, this->max_queue_, this->batch_max_, c.moving_speed_kmh, c.moving_interval_s,
+                c.turn_angle_deg, c.stop_delay_s, c.heartbeat_s);
 }
 
 bool TraccarUplink::now_(uint32_t *unix) {
   if (this->last_unix_ != 0) {
-    *unix = this->last_unix_ + (millis() - this->last_unix_millis_) / 1000;
+    *unix = this->last_unix_ + (now_ms() - this->last_unix_millis_) / 1000;
     return true;
   }
 #ifdef USE_TIME
@@ -65,7 +80,7 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
   if (unix == 0 && !this->now_(&unix))
     return;  // no time yet: nothing useful to record
   this->last_unix_ = unix;
-  this->last_unix_millis_ = millis();
+  this->last_unix_millis_ = now_ms();
 
   Decision why = this->tracker_.on_fix(unix, speed_kmh, course_deg);
   if (why == Decision::NONE)
@@ -93,18 +108,16 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
 
 void TraccarUplink::enqueue_(const Record &record) {
   // Never drop a record that's in the packet waiting for its answer.
-  while (this->queue_.size() >= this->max_queue_ && this->queue_.size() > this->in_flight_count_) {
+  if (this->queue_.full() && this->queue_.size() > this->in_flight_count_) {
     ESP_LOGW(TAG, "Queue full: dropping the oldest unsent record");
-    this->queue_.erase(this->queue_.begin() + this->in_flight_count_);
+    this->queue_.erase(this->in_flight_count_);
   }
-  if (this->queue_.size() < this->max_queue_)
-    this->queue_.push_back(record);
+  if (!this->queue_.push_back(record))
+    ESP_LOGW(TAG, "Queue full: record dropped");
   ESP_LOGD(TAG, "Queued a record (%u waiting)", (unsigned) this->queue_.size());
 }
 
 void TraccarUplink::receive_() {
-  if (!this->socket_)
-    return;
   uint8_t buf[16];
   for (int i = 0; i < 4; i++) {
     ssize_t len = this->socket_->recvfrom(buf, sizeof(buf), nullptr, nullptr);
@@ -116,7 +129,7 @@ void TraccarUplink::receive_() {
     if (accepted < 0)
       continue;
     size_t n = std::min<size_t>(this->in_flight_count_, this->queue_.size());
-    this->queue_.erase(this->queue_.begin(), this->queue_.begin() + n);
+    this->queue_.pop_front(n);
     this->records_sent_ += n;
     if ((size_t) accepted != n)
       ESP_LOGW(TAG, "Traccar accepted %d of %u records", accepted, (unsigned) n);
@@ -134,26 +147,17 @@ void TraccarUplink::send_() {
     return;
   if (!this->resolver_.ready()) {
     if (this->resolver_.consume_failure())
-      this->resolve_retry_at_ = millis() + 30000;
-    if ((int32_t) (millis() - this->resolve_retry_at_) >= 0)
+      this->resolve_retry_at_ = now_ms() + 30000;
+    if ((int32_t) (now_ms() - this->resolve_retry_at_) >= 0)
       this->resolver_.start(this->host_.c_str(), this->port_, TAG);
     return;
   }
-  if (!this->socket_) {
-    this->socket_ = socket::socket_udp(AF_INET, IPPROTO_IP);
-    if (!this->socket_) {
-      ESP_LOGE(TAG, "Could not create a UDP socket");
-      return;
-    }
-    this->socket_->setblocking(false);
-  }
-
   size_t count = std::min<size_t>(this->queue_.size(), this->batch_max_);
-  this->batch_.assign(this->queue_.begin(), this->queue_.begin() + count);
+  this->queue_.copy(0, count, this->batch_.get());
   size_t len = 0;
-  while (count > 0 && (len = ::trackcodec::encode_packet(this->buf_, sizeof(this->buf_), this->packet_id_,
-                                                             this->location_packet_id_, this->device_id_.c_str(),
-                                                             this->batch_.data(), count)) == 0)
+  while (count > 0 &&
+         (len = ::trackcodec::encode_packet(this->buf_, sizeof(this->buf_), this->packet_id_, this->location_packet_id_,
+                                            this->device_id_.c_str(), this->batch_.get(), count)) == 0)
     count--;
   if (len == 0) {
     ESP_LOGE(TAG, "Could not encode a packet (device ID too long?)");
@@ -165,7 +169,7 @@ void TraccarUplink::send_() {
   ssize_t sent = this->socket_->sendto(this->buf_, len, 0, (struct sockaddr *) &addr, addr_len);
   if (sent != (ssize_t) len) {
     ESP_LOGW(TAG, "Send failed (errno %d); trying again at the next send interval", errno);
-    this->last_send_ = millis();
+    this->last_send_ = now_ms();
     this->flush_requested_ = false;
     return;
   }
@@ -173,18 +177,18 @@ void TraccarUplink::send_() {
   this->bytes_sent_ += len;
   this->in_flight_ = true;
   this->in_flight_count_ = count;
-  this->sent_at_ = millis();
-  this->last_send_ = millis();
+  this->sent_at_ = now_ms();
+  this->last_send_ = now_ms();
   this->flush_requested_ = false;
   ESP_LOGD(TAG, "Sent %u records in %u bytes", (unsigned) count, (unsigned) len);
 }
 
 void TraccarUplink::loop() {
-  uint32_t now_ms = millis();
+  uint32_t now = now_ms();
 
   // Heartbeats while parked without a fix (the tracker ignores this while fixes flow).
-  if (now_ms - this->last_tick_ >= 1000) {
-    this->last_tick_ = now_ms;
+  if (now - this->last_tick_ >= 1000) {
+    this->last_tick_ = now;
     uint32_t unix;
     if (this->now_(&unix) && this->tracker_.on_tick(unix) == Decision::HEARTBEAT) {
       this->enqueue_(this->base_record_(unix, Decision::HEARTBEAT));
@@ -198,7 +202,7 @@ void TraccarUplink::loop() {
   this->receive_();
 
   if (this->in_flight_) {
-    if (now_ms - this->sent_at_ < this->ack_timeout_)
+    if (now - this->sent_at_ < this->ack_timeout_)
       return;
     // No answer: send the same records again in a new packet.
     this->in_flight_ = false;
@@ -208,14 +212,14 @@ void TraccarUplink::loop() {
       ESP_LOGW(TAG, "No answer from %s after %u tries; resolving it again", this->host_.c_str(), this->failures_);
       this->resolver_.forget();
       this->failures_ = 0;
-      this->last_send_ = now_ms;  // back off until the next send interval
+      this->last_send_ = now;  // back off until the next send interval
       return;
     }
     this->flush_requested_ = true;
   }
 
   bool due = this->flush_requested_ || this->queue_.size() >= this->batch_max_ ||
-             now_ms - this->last_send_ >= this->send_interval_;
+             now - this->last_send_ >= this->send_interval_;
   if (due)
     this->send_();
 }

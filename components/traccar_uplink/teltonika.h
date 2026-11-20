@@ -9,6 +9,7 @@
 //
 // No ESPHome dependencies: tests/cpp builds this on the host.
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <cstddef>
@@ -19,8 +20,8 @@ namespace trackcodec {
 static constexpr uint32_t GH3000_EPOCH = 1167609600UL;
 
 struct Record {
-  uint32_t time;        // Unix seconds, UTC
-  bool has_location;    // false: a time-only record; Traccar keeps the last position
+  uint32_t time;      // Unix seconds, UTC
+  bool has_location;  // false: a time-only record; Traccar keeps the last position
   float latitude;
   float longitude;
   float speed_kmh;
@@ -33,9 +34,12 @@ struct Record {
 // Bytes a record takes in a packet.
 inline size_t record_size(const Record &r) {
   size_t n = 4 + 1;  // time, global mask
-  if (r.has_location) n += 1 + 8 + 1 + 1 + 1;  // location mask, lat/lon, course, speed, sats
-  if (r.motion >= 0) n += 1 + 1 + 1;              // count, id, 1-byte value
-  if (r.battery_mv > 0) n += 1 + 1 + 2;           // count, id, 2-byte value
+  if (r.has_location)
+    n += 1 + 8 + 1 + 1 + 1;  // location mask, lat/lon, course, speed, sats
+  if (r.motion >= 0)
+    n += 1 + 1 + 1;  // count, id, 1-byte value
+  if (r.battery_mv > 0)
+    n += 1 + 1 + 2;  // count, id, 2-byte value
   return n;
 }
 
@@ -44,7 +48,8 @@ inline size_t header_size(size_t id_len) { return 2 + 2 + 1 + 1 + 2 + id_len + 1
 // Size of a packet carrying records[0..count): header, records, trailing count.
 inline size_t packet_size(size_t id_len, const Record *records, size_t count) {
   size_t n = header_size(id_len) + 1;
-  for (size_t i = 0; i < count; i++) n += record_size(records[i]);
+  for (size_t i = 0; i < count; i++)
+    n += record_size(records[i]);
   return n;
 }
 
@@ -73,16 +78,18 @@ inline size_t encode_packet(uint8_t *out, size_t cap, uint16_t packet_id, uint8_
                             const char *device_id, const Record *records, size_t count) {
   using namespace detail;
   size_t id_len = std::strlen(device_id);
-  if (count == 0 || count > 255 || id_len == 0 || id_len > 64) return 0;
+  if (count == 0 || count > 255 || id_len == 0 || id_len > 64)
+    return 0;
   size_t total = packet_size(id_len, records, count);
-  if (total > cap) return 0;
+  if (total > cap)
+    return 0;
   uint8_t *p = out;
   put16(p, total - 2);  // length of what follows
   put16(p, packet_id);
   put8(p, 0x01);  // packet type: data, acknowledgement wanted
   put8(p, location_packet_id);
   put16(p, id_len);
-  std::memcpy(p, device_id, id_len);
+  std::memcpy(p, device_id, id_len);  // NOLINT(bugprone-not-null-terminated-result): length-prefixed
   p += id_len;
   put8(p, 0x07);  // codec: GH3000
   put8(p, count);
@@ -91,19 +98,23 @@ inline size_t encode_packet(uint8_t *out, size_t cap, uint16_t packet_id, uint8_
     uint32_t t = r.time > GH3000_EPOCH ? r.time - GH3000_EPOCH : 0;
     put32(p, t & 0x3fffffff);
     uint8_t global = r.has_location ? 0x01 : 0x00;
-    if (r.motion >= 0) global |= 0x02;
-    if (r.battery_mv > 0) global |= 0x04;
+    if (r.motion >= 0)
+      global |= 0x02;
+    if (r.battery_mv > 0)
+      global |= 0x04;
     put8(p, global);
     if (r.has_location) {
       put8(p, 0x1D);  // latitude/longitude, course, speed, satellites
       put_float(p, r.latitude);
       put_float(p, r.longitude);
       float course = r.course_deg;
-      while (course < 0) course += 360;
-      while (course >= 360) course -= 360;
+      while (course < 0)
+        course += 360;
+      while (course >= 360)
+        course -= 360;
       put8(p, static_cast<uint8_t>(course * 256.0f / 360.0f));
       float speed = r.speed_kmh < 0 ? 0 : (r.speed_kmh > 255 ? 255 : r.speed_kmh);
-      put8(p, static_cast<uint8_t>(speed + 0.5f));
+      put8(p, static_cast<uint8_t>(std::lround(speed)));
       put8(p, r.satellites);
     }
     if (r.motion >= 0) {
@@ -124,9 +135,12 @@ inline size_t encode_packet(uint8_t *out, size_t cap, uint16_t packet_id, uint8_
 // Traccar's answer to a packet: 00 05 00 00 01 <location packet id> <records accepted>.
 // Returns the number of records accepted, or -1 if this isn't an answer to location_packet_id.
 inline int parse_ack(const uint8_t *buf, size_t len, uint8_t location_packet_id) {
-  if (len < 7) return -1;
-  if (buf[0] != 0x00 || buf[1] != 0x05 || buf[4] != 0x01) return -1;
-  if (buf[5] != location_packet_id) return -1;
+  if (len < 7)
+    return -1;
+  if (buf[0] != 0x00 || buf[1] != 0x05 || buf[4] != 0x01)
+    return -1;
+  if (buf[5] != location_packet_id)
+    return -1;
   return buf[6];
 }
 
@@ -144,8 +158,8 @@ inline uint32_t gnss_to_unix(uint32_t ddmmyy, uint32_t hhmmsscc) {
   unsigned m = month;
   unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + day - 1;
   unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  long days = static_cast<long>(era) * 146097 + static_cast<long>(doe) - 719468;
-  return static_cast<uint32_t>(days * 86400L + hour * 3600 + minute * 60 + second);
+  int64_t days = static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(doe) - 719468;
+  return static_cast<uint32_t>(days * 86400 + hour * 3600 + minute * 60 + second);
 }
 
 }  // namespace trackcodec

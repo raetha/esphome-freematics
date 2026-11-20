@@ -1,0 +1,59 @@
+# ESPHome-style component test: every option and automation of traccar_uplink,
+# compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
+esphome:
+  name: test-traccar-uplink
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: MySSID
+  password: password1
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [traccar_uplink]
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+sensor:
+  - platform: template
+    id: battery
+    lambda: return 12.6;
+
+traccar_uplink:
+  id: traccar
+  host: traccar.example.com
+  port: 5027
+  device_id: test-device
+  send_interval: 30s
+  ack_timeout: 10s
+  max_queue: 100
+  batch_max: 20
+  battery_voltage: battery
+  time_id: sntp_time
+  moving_speed: 8
+  stop_delay: 120s
+  moving_interval: 5s
+  turn_angle: 45
+  min_turn_interval: 2s
+  heartbeat_interval: 30min
+  on_motion_start:
+    - logger.log: "moving"
+  on_motion_stop:
+    - traccar_uplink.flush: traccar
+
+interval:
+  - interval: 2s
+    then:
+      - lambda: |-
+          id(traccar).add_fix(191126, 18300500, 40.7128f, -74.006f, 52.0f, 270.0f, 9);
+          ESP_LOGD("test", "moving %d, queued %u", id(traccar).is_moving(), (unsigned) id(traccar).queue_size());

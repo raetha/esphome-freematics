@@ -10,12 +10,13 @@ ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogge
 - **`dev` holds the expected next version** in `packages/freematics-oneplus-b.yaml` (`esphome: project: version`). With the first change after a release, set it to what that change calls for under semver and say why in a line. Never date the changelog or open the release pull request unless the owner asks. `DRAFT` blocks the first release until the owner says it's ready.
 - CI runs on every push and pull request; a push to `dev` that changes `packages/` or `components/` publishes a test build (`<version>-dev.<n>` pre-release tag).
 - **The examples must work pasted alone into ESPHome Device Builder** (the owner uses the Home Assistant app and doesn't touch its file system): packages from `url:`, components from `github://`, never `!include`; `refresh: 0s`; `ref: dev` until the first release, `main` from then on. CI builds them from the checkout through `scripts/localize.py`.
+- **Components meet the checklist in `docs/development.md` → "Component checklist"** (ESPHome's own rules: its clang-format and clang-tidy, no blocking, no heap allocation after `setup()`, loop time instead of `millis()`, host tests for plain logic, a `tests/components/` config).
 - **Build one piece at a time** and test it on the bench before it goes in a car. Update `docs/plan.md` (status, what was learned) with each step, so the repo, not chat history, records where things stand.
 - Push back when a change looks like a lot of complexity for little gain.
 
 ## Validate
 
-- `pip install -r requirements-dev.txt`, then `pytest tests/` (builds the component's plain C++ parts with g++), `ruff check scripts/ tests/ components/`, `ruff format --check scripts/ tests/ components/`, `python3 scripts/markdown.py --check $(git ls-files '*.md')` and `python3 scripts/release.py check`.
+- `pip install -r requirements-dev.txt`, then `pytest tests/` (builds the component's plain C++ parts with g++), `ruff check scripts/ tests/ components/`, `ruff format --check scripts/ tests/ components/`, clang-format and clang-tidy as `docs/development.md` → "Setup and testing" shows, `python3 scripts/markdown.py --check $(git ls-files '*.md')` and `python3 scripts/release.py check`.
 - `python3 scripts/localize.py examples/<name>.yaml build/local`, `cp examples/secrets.example.yaml build/local/secrets.yaml`, then `esphome config build/local/<name>.yaml` for each example. Sessions can't compile: the ESP-IDF install needs dl.espressif.com, which the session proxy blocks; CI compiles.
 - Lambdas and C++ only prove themselves at compile time: put them on a `try/` branch with a pull request and let CI compile before merging.
 

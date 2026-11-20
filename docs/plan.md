@@ -59,6 +59,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-19: Adopted ESPHome's component rules as a checklist (no quality scale exists); `traccar_uplink` now allocates its queue and buffers once at startup, uses loop time, and has a component test config; clang-format and clang-tidy in CI.
 - 2026-11-19: Repository public; CI automatic again. Examples fetch everything from GitHub so they can be pasted into ESPHome Device Builder; CI builds them from the checkout (`scripts/localize.py`).
 - 2026-11-19: Traccar first: the native API would use about 40 times the data of the stock firmware on a pay-as-you-go plan. Built the `traccar_uplink` component (Teltonika GH3000 over UDP, tracking filter, acknowledged batches), split the package into board, Wi-Fi-first and uplink packages with an example per configuration, and made the vehicle bus read-only.
 - 2026-11-19: Switched phases 0 to 2 from MQTT to the native API dialled from the device, over WireGuard; data use is now the top requirement. SIM7070G modules on Hologram. CI made manual-only.

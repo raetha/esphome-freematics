@@ -19,6 +19,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 
 ### Internal
 
+- Components follow ESPHome's own rules for components (clang-format, clang-tidy, no memory allocation while running, a component test config), checked in CI.
 - Repository workflow: `dev`/`main` branches, changelog checks, `esphome config` and `esphome compile` of the example in CI, test builds as pre-release tags, Dependabot.
 
 [Unreleased]: https://github.com/raetha/esphome-freematics/commits/dev
