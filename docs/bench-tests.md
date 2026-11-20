@@ -64,6 +64,7 @@ Only after test 3 got answers. In the normal config, under `substitutions:` add:
   lte_on_wifi: "true"           # LTE stays on beside Wi-Fi, so its logs reach Device Builder
   modem_pwrkey_press: 200ms     # the press that worked in test 3 (200ms, 1s or 1500ms)
   modem_pwrkey_tries: "10"
+  modem_pwrkey_wait: 20s        # with a 1 s or longer press: give the module time to start before pressing again
 ```
 
 **Look for:** `Cellular: PPP up` and the modem's own lines. Traffic still goes over Wi-Fi (it's preferred whenever both are up), so this uses almost no cellular data.

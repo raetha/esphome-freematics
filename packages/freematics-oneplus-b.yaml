@@ -13,7 +13,8 @@ substitutions:
   modem_rx_pin: GPIO35          # the library uses GPIO32/GPIO33 instead with co-processor version 13
   modem_tx_pin: GPIO2
   modem_pwrkey_press: 200ms     # the Freematics library's press
-  modem_pwrkey_tries: "5"       # presses, 10 s apart, until the module answers
+  modem_pwrkey_tries: "5"       # presses until the module answers
+  modem_pwrkey_wait: 10s        # between presses; longer with a long press, which can switch a started module off
   modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
@@ -99,7 +100,7 @@ script:
                   - output.turn_on: modem_pwrkey
                   - delay: ${modem_pwrkey_press}
                   - output.turn_off: modem_pwrkey
-                  - delay: 10s
+                  - delay: ${modem_pwrkey_wait}
 
 globals:
   - id: modem_synced
