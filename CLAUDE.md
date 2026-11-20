@@ -27,6 +27,7 @@ ESPHome on the Freematics ONE+ Model B OBD dongle, replacing the stock telelogge
 - Cellular: SIM7070G on Hologram (APN `hologram`). RX GPIO35, TX GPIO2, PWRKEY GPIO27 (200 ms high pulse, repeated until the module answers, as the Freematics library does), no RTS/CTS. ESPHome's `modem` doesn't drive PWRKEY, and has no network type sensor for the SIM7070.
 - GPIO12 is the flash-voltage strapping pin: never drive it unless an external GNSS is fitted.
 - Traccar: Teltonika GH3000 (codec 7) over UDP on port 5027 is the densest format Traccar decodes (17 bytes a fix) and Traccar acknowledges each packet with `00 05 00 00 01 <location packet id> <count>`; the Freematics protocol (5170) is text and unacknowledged. Logic that can be tested on the host lives in plain headers (`teltonika.h`, `tracker.h`) with tests against a mirror of Traccar's decoder.
+- ESPHome ids become global C++ variables: an id that names a C function (`link`, `read`, `time`...) fails to compile, and `unix` is a macro under gnu++.
 - A `$` inside a lambda in a package is read as a substitution: spell it `\x24` in strings and keep it out of comments.
 - `packages/wifi-first.yaml` switches LTE off while a known Wi-Fi network is connected, as the telelogger did.
 - `wifi:` and `modem:` validate together. `network: priority` can't include the modem yet; ESP-IDF's route priorities (Wi-Fi STA 100, PPP 20) favour Wi-Fi in the moment both are up.

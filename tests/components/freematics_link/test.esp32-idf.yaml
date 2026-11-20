@@ -23,7 +23,7 @@ uart:
     baud_rate: 115200
 
 freematics_link:
-  id: link
+  id: coproc_link
   uart_id: coproc
   reset_pin:
     number: GPIO15
