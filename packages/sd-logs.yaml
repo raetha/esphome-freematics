@@ -6,7 +6,7 @@
 # (external_components: components: [file_logger, ...]).
 
 substitutions:
-  sd_log_level: DEBUG
+  sd_log_level: DEBUG       # what goes into the log on the card
   sd_log_max_size: 1MB      # two files at most: 2 MB
 
 file_logger:

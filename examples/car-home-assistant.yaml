@@ -11,6 +11,38 @@ substitutions:
   name: freematics-car1
   friendly_name: Car 1
   cell_apn: hologram
+  # Optional settings, with their defaults: uncomment a line to change it.
+  # The board: cellular module, GPS, beeps, logs
+  # modem_model: SIM7070          # the cellular module: SIM7070 (SIM7070G), or SIM7600 (untested)
+  # modem_rx_pin: GPIO35          # the module's serial pins; co-processor version 1.3 boards use GPIO32...
+  # modem_tx_pin: GPIO2           # ...and GPIO33
+  # beep_on_boot: "true"          # a 200 ms beep when the firmware has started
+  # beep_on_network: "true"       # a 50 ms beep when Wi-Fi or cellular comes up, as the stock firmware does
+  # modem_restart_on_boot: "true" # restart the module the first time it answers after each boot (it keeps power across ESP32 restarts)
+  # modem_pwrkey_press: 200ms     # the Freematics library's press
+  # modem_pwrkey_tries: "6"       # presses until the module answers; every third try first switches it off (a stuck module)
+  # modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
+  # modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
+  # modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
+  # modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
+  # gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
+  # sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
+  # coproc_log_level: DEBUG       # the co-processor link's log; VERBOSE also logs every GPS reply (with logger_level: VERBOSE)
+  # logger_level: DEBUG           # the device's log: DEBUG, VERBOSE, INFO, WARN...
+
+  # Wi-Fi first
+  # lte_back_after: 30s     # Wi-Fi gone this long: turn LTE back on
+  # wifi_pause_speed: "10"  # km/h: at or above, with no Wi-Fi connected, stop searching for Wi-Fi; "1000": never pause
+  # wifi_resume_after: "30" # seconds below that speed (or without a GNSS fix) before searching again
+  # lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
+
+  # Home Assistant
+  # api_batch_delay: 2s      # state updates within this window share one packet
+
+  # SD card: log (sd-logs.yaml)
+  # sd_log_level: DEBUG       # what goes into the log on the card
+  # sd_log_max_size: 1MB      # two files at most: 2 MB
+  # End of the optional settings.
 
 packages:
   freematics:

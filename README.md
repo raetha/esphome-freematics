@@ -16,7 +16,7 @@ The examples are complete device configs that fetch everything else from this re
 
 1. Back up the stock firmware if you may want to go back: `esptool.py --port <port> read_flash 0 0x1000000 stock.bin` on a computer with the dongle on USB (restore with `write_flash 0 stock.bin`).
 2. **New device**, then **Edit** it and replace everything with [examples/car-traccar.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/car-traccar.yaml) or [examples/car-home-assistant.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/car-home-assistant.yaml) ([which one](https://github.com/raetha/esphome-freematics/blob/main/docs/configurations.md)).
-3. Change the substitutions at the top: the name, the APN, and for Traccar the server and the device's identifier in Traccar. Optional packages (the SD card, sleep while parked) are commented out under `packages:`; uncomment the ones you want.
+3. Change the substitutions at the top: the name, the APN, and for Traccar the server and the device's identifier in Traccar. Below them, every optional setting is listed with its default, commented out: uncomment a line to change it. Optional packages (the SD card, sleep while parked) are commented out under `packages:`; uncomment the ones you want.
 4. Under **Secrets**, add the secrets the example lists at its top (Wi-Fi and an API key, which also encrypts over-the-air updates; for Home Assistant also the WireGuard keys). [examples/secrets.example.yaml](https://github.com/raetha/esphome-freematics/blob/main/examples/secrets.example.yaml) shows their form.
 5. **Install**, with the dongle plugged into the computer you're browsing from: **Plug into this computer**. Later updates go over the air while the car is on your Wi-Fi.
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -74,3 +76,13 @@ def test_optional_packages():
     assert "b.yaml" not in plain and "  a: !include /repo/packages/a.yaml" in plain
     full = localize.localize(text, Path("/repo"), optional=True)
     assert "  b: !include /repo/packages/b.yaml" in full
+
+
+def test_examples_list_every_optional_setting():
+    """Each example shows its packages' settings: scripts/example_settings.py."""
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "example_settings.py"), "--check"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout

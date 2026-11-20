@@ -7,7 +7,7 @@
 
 substitutions:
   traccar_stored_records: "50000"     # 28 bytes each: 50,000 is 1.4 MB, about 140 hours of driving
-  traccar_store_writer_task: "true"   # write to the card from a task of its own; "false": from the loop, as before (tens of ms per record)
+  traccar_store_writer_task: "true"   # write to the card from a task of its own; "false": from the main loop (tens of ms per record)
 
 file_queue:
   id: traccar_store

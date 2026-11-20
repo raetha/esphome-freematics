@@ -27,6 +27,7 @@ clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cp
 clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 $(printf -- '-I %s ' components/*/)
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
+python3 scripts/example_settings.py --check   # the examples list every package substitution (run without --check to rewrite them)
 python3 scripts/localize.py examples/car-traccar.yaml build/local   # the example, using this checkout
 cp examples/secrets.example.yaml build/local/secrets.yaml   # build/ is git-ignored
 esphome config build/local/car-traccar.yaml
