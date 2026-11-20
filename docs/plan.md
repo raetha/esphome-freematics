@@ -61,6 +61,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-20: Bench, 0.1.0-dev.9 with `sd-card.yaml` and `sd-logs.yaml`: the card mounted (SD04G, 3.7 GB, 20 MHz) and the log file grew about 300 bytes a second, most of it the configuration dump repeated on every log-viewer connection. Free heap 178 KB. Traccar still unanswered (test 1 pending).
+
 - 2026-11-20: Overnight: the encoder's packets checked against a real Traccar 6.17.0 (acknowledged, decoded right), so the missing acknowledgements are on the network path; `scripts/traccar_check.py` checks a server from anywhere. Bench switches: `lte_on_wifi`, `modem_pwrkey_press`, `modem_pwrkey_tries`. SD storage rebuilt on `dev` as opt-in packages, plus `file_logger` for logs on the card. The bench test plan is `docs/bench-tests.md`.
 
 - 2026-11-20: The modem probe (200 ms presses, GPIO35/GPIO2) got no byte back in a minute. With co-processor 1.4 those are the library's pins, so the probe now lengthens the press (200 ms, 1 s, 1.5 s) in one run. The API log connection still dropped every minute or so with none of this project's components running and Wi-Fi power saving off, so the drops are not caused by them. OTA in the examples is now encrypted with the API key (ESPHome's recommended form) instead of a separate password.
