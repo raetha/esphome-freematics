@@ -19,6 +19,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - Nothing is sent to the vehicle bus: only commands the co-processor answers itself.
 - The example configs are complete on their own: paste one into ESPHome Device Builder, set a few substitutions and secrets, and build; the packages and the component come from GitHub.
 - The Traccar server settings the configuration needs (docs/configurations.md).
+- A bench probe for the cellular module (`examples/bench-modem-probe.yaml`): presses the power key and sends `AT` as Freematics' own library does, and logs everything the module answers, without ESPHome's modem component and without using data.
 - The Traccar configuration shows its logs in ESPHome Device Builder over Wi-Fi, next to over-the-air updates, without connecting to Home Assistant or using cellular data. It needs a `freematics_api_key` secret.
 
 ### Internal

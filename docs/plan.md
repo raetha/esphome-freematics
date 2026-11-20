@@ -53,11 +53,13 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 - [ ] The stock telelogger's serial boot log from one dongle (`TYPE:` and `GNSS:OK(I)` or `OK(E)` lines) to confirm the co-processor version and GNSS path.
 - [ ] Which OBD values matter beyond fuel level?
-- [ ] Does the Traccar server have UDP 5027 (Teltonika) open, and does the device keep its identifier?
+- [ ] Does the Traccar server have UDP 5027 (Teltonika) open, and does the device keep its identifier? Its hostname must resolve in public DNS for LTE.
 - [ ] Home Assistant configuration only: where the WireGuard server runs, and whether its endpoint works from inside the home network.
 - [ ] What the co-processor can hear passively on each car's OBD port.
 
 ## Log
+
+- 2026-11-19: Fourth bench test (0.1.0-dev.6): the co-processor works (version 1.4, 12 satellites, a fix at home). The API disconnects are not restarts: uptime ran on across them (reset reason: the OTA restart). The modem still answered nothing to ESPHome's modem component, so `examples/bench-modem-probe.yaml` talks to it the library's way, with every byte logged. Traccar never acknowledged: the server's hostname doesn't resolve in public DNS (NXDOMAIN from 1.1.1.1 and 8.8.8.8), so over LTE the device couldn't reach it at all, and at home it resolves through the home DNS but no answer came back on UDP 5027 either.
 
 - 2026-11-19: Third bench test (0.1.0-dev.4, charger, logs over Wi-Fi): the device had restarted shortly before the log began (its clock had run 263 s without a sync, and safe mode marked the boot good 4 s into the log), and the API dropped right after the uplink re-sent a record Traccar hadn't acknowledged within 15 s, as in the second test. The uplink sent a location record, so the co-processor most likely answered `ATGPS`, but its replies are logged only at VERBOSE and its start-up before the log began. The board package now has `debug:` (reset reason and uptime) and both components report their state when a log viewer connects.
 
