@@ -17,7 +17,7 @@ substitutions:
   name: freematics-eli            # the device's existing name, so it installs over the air
   probe_rx_pin: GPIO35
   probe_tx_pin: GPIO2
-  pwrkey_press: 200ms             # the library's press; the SIM7070 datasheet asks for longer
+  pwrkey_press: 200ms             # the library's press; a longer one (1500ms) is the next thing to try
 
 esphome:
   name: ${name}
