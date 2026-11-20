@@ -20,15 +20,15 @@ namespace trackcodec {
 static constexpr uint32_t GH3000_EPOCH = 1167609600UL;
 
 struct Record {
-  uint32_t time;      // Unix seconds, UTC
-  bool has_location;  // false: a time-only record; Traccar keeps the last position
+  uint32_t time;  // Unix seconds, UTC
   float latitude;
   float longitude;
   float speed_kmh;
   float course_deg;
-  uint8_t satellites;
   uint16_t battery_mv;  // 0: not sent (GH3000 IO 67)
-  int8_t motion;        // -1: not sent; 0 or 1 (GH3000 IO 240)
+  bool has_location;    // false: a time-only record; Traccar keeps the last position
+  uint8_t satellites;
+  int8_t motion;  // -1: not sent; 0 or 1 (GH3000 IO 240)
 };
 
 // Bytes a record takes in a packet.

@@ -24,7 +24,7 @@ pip install -r requirements-dev.txt
 pytest tests/
 ruff check scripts/ tests/ components/ && ruff format --check scripts/ tests/ components/
 clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cpp' 'tests/cpp/*.cpp')
-clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink -I components/freematics_link
+clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 $(printf -- '-I %s ' components/*/)
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
 python3 scripts/localize.py examples/car-traccar.yaml build/local   # the example, using this checkout

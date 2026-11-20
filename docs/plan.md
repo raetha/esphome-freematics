@@ -47,7 +47,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 | --- | --- | --- |
 | `traccar_uplink` | Tracking filter (moving, turns, start, stop, heartbeat), in-memory queue, Teltonika GH3000 over UDP with acknowledgements, motion triggers | Built (phase 1) |
 | `freematics_link` | Owns the co-processor UART: reset, `ATI` version, `ATGPSON`, `ATGPS` polling into fixes, sensors and a time source, `ATRV` battery voltage; later passive vehicle data | On `dev`, being tested on the bench |
-| SD-backed queue | Records survive reboots and long outages | Phase 3 |
+| `sd_card`, `file_queue` | Generic: mount a microSD card over an ESPHome SPI bus; a first-in, first-out file of fixed-size records that survives resets (two CRC-checked headers). The Traccar uplink keeps every unacknowledged record in one (`packages/sd-traccar.yaml`) | On `dev`, opt-in; to test on the bench (phase 3) |
+| `file_logger` | Generic: the device's log written to a file on the card, in small chunks from the loop, rotated at a size (`packages/sd-logs.yaml`) | On `dev`, opt-in; to test on the bench |
 
 ## Open questions
 
@@ -58,6 +59,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 - [ ] What the co-processor can hear passively on each car's OBD port.
 
 ## Log
+
+- 2026-11-20: Overnight: the encoder's packets checked against a real Traccar 6.17.0 (acknowledged, decoded right), so the missing acknowledgements are on the network path; `scripts/traccar_check.py` checks a server from anywhere. Bench switches: `lte_on_wifi`, `modem_pwrkey_press`, `modem_pwrkey_tries`. SD storage rebuilt on `dev` as opt-in packages, plus `file_logger` for logs on the card. The bench test plan is `docs/bench-tests.md`.
 
 - 2026-11-20: The modem probe (200 ms presses, GPIO35/GPIO2) got no byte back in a minute. With co-processor 1.4 those are the library's pins, so the probe now lengthens the press (200 ms, 1 s, 1.5 s) in one run. The API log connection still dropped every minute or so with none of this project's components running and Wi-Fi power saving off, so the drops are not caused by them. OTA in the examples is now encrypted with the API key (ESPHome's recommended form) instead of a separate password.
 

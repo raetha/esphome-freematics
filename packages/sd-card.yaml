@@ -1,0 +1,17 @@
+# The dongle's microSD slot, mounted at /sdcard. On its own it does nothing;
+# sd-traccar.yaml and sd-logs.yaml put it to use. Without a card (or with one
+# that isn't FAT-formatted) the device logs a warning and carries on.
+#
+# Needs the board package; the device config loads the components
+# (external_components: components: [sd_card, ...]).
+
+spi:
+  id: sd_bus
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+sd_card:
+  id: sd
+  spi_id: sd_bus
+  cs_pin: GPIO5

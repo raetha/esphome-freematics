@@ -1,0 +1,17 @@
+# Every record stays on the SD card until Traccar acknowledges it, so a restart
+# or a long time without coverage loses nothing; memory holds the next 300 to
+# send. Without a card the uplink keeps 300 in memory, as without this package.
+#
+# Needs sd-card.yaml and uplink-traccar.yaml; the device config loads the
+# components (external_components: components: [file_queue, ...]).
+
+substitutions:
+  traccar_stored_records: "50000"     # 28 bytes each: 50,000 is 1.4 MB, about 140 hours of driving
+
+file_queue:
+  id: traccar_store
+  path: /sdcard/traccar.bin
+  capacity: ${traccar_stored_records}
+
+traccar_uplink:
+  file_queue_id: traccar_store
