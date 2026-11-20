@@ -84,7 +84,7 @@ jobs:
 
       # The ESPHome-facing files are checked by the firmware compile; the plain C++ headers here.
       - name: clang-tidy on the plain C++ headers
-        run: clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink
+        run: clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink -I components/freematics_link
 
   tests:
     name: Script and workflow tests

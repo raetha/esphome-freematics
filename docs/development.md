@@ -6,13 +6,14 @@
 | --- | --- |
 | `packages/freematics-oneplus-b.yaml` | The board package every device config pulls in; its `esphome: project: version` is the release version |
 | `packages/wifi-first.yaml`, `packages/uplink-*.yaml` | Wi-Fi first; one uplink package per configuration ([configurations.md](configurations.md)) |
+| `components/freematics_link/` | The co-processor link component (GNSS, battery voltage, version, a time source); `link_parse.h` is plain C++, tested on the host |
 | `components/traccar_uplink/` | The Traccar uplink component; `teltonika.h` and `tracker.h` are plain C++ with no ESPHome dependencies, tested on the host |
 | `examples/` | A complete device config per configuration, pasteable on its own: packages and components come from GitHub (`url:`, `github://`), never `!include`. CI builds each from the checkout instead (`scripts/localize.py`) with `examples/secrets.example.yaml` |
 | `docs/plan.md` | Status, decisions, phases and open questions: keep it current |
 | `docs/hardware.md`, `docs/networking.md` | Hardware facts and sources; Wi-Fi/LTE/WireGuard and data use |
 | `docs/backlog.md`, `docs/audits.md` | Ideas set aside; review records |
 | `scripts/release.py`, `scripts/markdown.py`, `scripts/localize.py` | CI's changelog, version, test build and release-notes helpers; the Markdown line check; an example rewritten to use this checkout |
-| `tests/` | Tests for the scripts and workflows, and `test_traccar_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder, the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
+| `tests/` | Tests for the scripts and workflows, `test_freematics_link.py`, which checks the co-processor reply parsing, and `test_traccar_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder, the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
 | `.clang-format`, `.clang-tidy` | ESPHome's C++ rules, copied from esphome/esphome |
 
 ## Setup and testing
@@ -23,7 +24,7 @@ pip install -r requirements-dev.txt
 pytest tests/
 ruff check scripts/ tests/ components/ && ruff format --check scripts/ tests/ components/
 clang-format --dry-run --Werror $(git ls-files 'components/*.h' 'components/*.cpp' 'tests/cpp/*.cpp')
-clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink
+clang-tidy --quiet tests/cpp/tidy.cpp --header-filter='components/.*' -- -std=gnu++20 -I components/traccar_uplink -I components/freematics_link
 python3 scripts/markdown.py --check $(git ls-files '*.md')
 python3 scripts/release.py check
 python3 scripts/localize.py examples/car-traccar.yaml build/local   # the example, using this checkout
