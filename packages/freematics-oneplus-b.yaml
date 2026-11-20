@@ -14,6 +14,7 @@ substitutions:
   modem_tx_pin: GPIO2
   modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
+  sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
   coproc_log_level: DEBUG       # VERBOSE also logs every GNSS reply (set logger_level: VERBOSE too)
   logger_level: DEBUG
 
@@ -40,9 +41,15 @@ logger:
   logs:
     freematics_link: ${coproc_log_level}
 
+# Both set the same system clock. GPS time is free and checked every minute once
+# there's a fix; SNTP covers the time before the first fix, at boot and then
+# rarely, since over LTE each sync costs a DNS lookup and an NTP exchange.
 time:
+  - platform: freematics_link
+    id: gps_time
   - platform: sntp
     id: sntp_time
+    update_interval: ${sntp_interval}
 
 # ---------- Cellular (xBee socket) ----------
 modem:

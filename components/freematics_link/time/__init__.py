@@ -1,4 +1,4 @@
-"""Time from the co-processor's GNSS, for when there's no network for SNTP."""
+"""Time from the co-processor's GNSS: free, unlike SNTP over LTE."""
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
@@ -18,7 +18,7 @@ CONFIG_SCHEMA = time_.TIME_SCHEMA.extend(
         cv.GenerateID(): cv.declare_id(FreematicsTime),
         cv.GenerateID(CONF_FREEMATICS_LINK_ID): cv.use_id(FreematicsLink),
     }
-).extend(cv.polling_component_schema("5min"))
+).extend(cv.polling_component_schema("1min"))
 
 
 async def to_code(config):

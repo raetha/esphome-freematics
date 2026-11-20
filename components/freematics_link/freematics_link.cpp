@@ -55,7 +55,6 @@ void FreematicsLink::dump_config() {
                 "  Sends only ATI, ATRV, ATGPSON and ATGPS: nothing reaches the vehicle bus",
                 this->gnss_interval_, this->battery_interval_);
   LOG_PIN("  Reset pin: ", this->reset_pin_);
-  this->check_uart_settings(115200);
 }
 
 void FreematicsLink::send_(Command cmd) {

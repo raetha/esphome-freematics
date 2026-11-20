@@ -38,6 +38,7 @@ Approximate, per dongle; phase 1 should check them against Hologram's usage page
 | One native API state update | about 10 to 20 inside the encrypted frame; updates within `batch_delay` (2 s here) share one packet |
 | Home Assistant's keepalive ping | about 250 per exchange with WireGuard, every 20 s, but only when nothing else was received in that time |
 | (Re)connecting the API | a few KB: HA reads the entity list again |
+| An SNTP sync | about 300: a DNS lookup and one NTP exchange, each about 150 with their IP and UDP headers. ESPHome's default of every 15 minutes would cost 15 to 30 KB a day over LTE, as much as the whole budget, so the board package syncs every 12 hours and takes the time from GPS, which is free |
 
 So:
 
