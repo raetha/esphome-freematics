@@ -1,0 +1,134 @@
+# Bench test: listen to the car's OBD port for one minute, sending nothing to
+# the car. It answers one question before anything else is built for vehicle
+# data: does anything arrive on the OBD port's CAN bus without asking for it?
+# On many recent cars (Volvo's central gateway among them) the answer is
+# nothing, and then asking (OBD requests) is the only way to get data.
+#
+# What it sends, all to the co-processor (none of it is a request to the car):
+#   ATI      the co-processor's version
+#   ATE0     no echo
+#   ATH1     show each frame's CAN ID
+#   ATCSM1   silent monitoring, if the co-processor supports it (an ELM327
+#            command; "?" means it doesn't, and the test goes on without it)
+#   ATSP6    fix the bus to ISO 15765-4, 500 kbit/s, 11-bit IDs, the OBD-II
+#            standard for cars from 2008 on, instead of detecting it (detection
+#            sends a request)
+#   ATM1     start listening; ATM0 stops after listen_seconds
+# Then it resets the co-processor (GPIO15), so nothing is left running.
+#
+# The co-processor's firmware is closed: whether ATM1 listens silently isn't
+# documented (docs/vehicle-data.md). Without silent mode, its CAN controller
+# acknowledges frames it receives, as every node on the bus does; at the right
+# bit rate that's harmless. The one known way a listener upsets a car is a wrong
+# bit rate, which ATSP6 rules out for a 2023 car.
+#
+# How to run it: car parked, engine/ready on or ignition on, nothing else
+# plugged into the OBD port. Paste this over the car's config, install, and
+# watch the logs: listening starts 30 s after boot and lasts listen_seconds.
+# Frames show as lines starting "<<<". Then put the normal config back.
+# Secrets it uses: wifi_ssid, wifi_password, freematics_api_key.
+
+substitutions:
+  name: freematics-test           # your device's name in ESPHome, so it installs over the air
+  listen_seconds: "60"
+
+esphome:
+  name: ${name}
+  on_boot:
+    - priority: -100
+      then:
+        - delay: 30s
+        - script.execute: obd_listen
+
+esp32:
+  board: esp32dev
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+  power_save_mode: none           # keeps the log connection steady
+  reboot_timeout: 0s
+
+api:
+  encryption:
+    key: !secret freematics_api_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    encryption:
+
+output:
+  # The co-processor's reset line, as in the board package: low resets it.
+  - platform: gpio
+    id: coproc_reset
+    pin:
+      number: GPIO15
+      ignore_strapping_warning: true
+
+globals:
+  - id: frames
+    type: uint32_t
+    initial_value: "0"
+
+uart:
+  - id: coproc
+    rx_pin: GPIO13
+    tx_pin: GPIO14
+    baud_rate: 115200
+    rx_buffer_size: 2048
+    debug:
+      direction: BOTH
+      dummy_receiver: true
+      after:
+        delimiter: "\r"
+        timeout: 100ms
+      sequence:
+        - lambda: |-
+            UARTDebug::log_string(direction, bytes);
+            if (direction == uart::UART_DIRECTION_RX)
+              id(frames)++;
+
+script:
+  - id: obd_listen
+    mode: single
+    then:
+      - logger.log: "OBD listen test: resetting the co-processor"
+      - output.turn_off: coproc_reset
+      - delay: 50ms
+      - output.turn_on: coproc_reset
+      - delay: 1500ms
+      - uart.write: { id: coproc, data: "ATI\r" }
+      - delay: 1s
+      - uart.write: { id: coproc, data: "ATE0\r" }
+      - delay: 500ms
+      - uart.write: { id: coproc, data: "ATH1\r" }
+      - delay: 500ms
+      - uart.write: { id: coproc, data: "ATCSM1\r" }
+      - delay: 500ms
+      - uart.write: { id: coproc, data: "ATSP6\r" }
+      - delay: 1s
+      - lambda: id(frames) = 0;
+      - logger.log:
+          level: INFO
+          format: "OBD listen test: listening for %s s (nothing is sent to the car)"
+          args: ['"${listen_seconds}"']
+      - uart.write: { id: coproc, data: "ATM1\r" }
+      - delay: ${listen_seconds}s
+      - uart.write: { id: coproc, data: "ATM0\r" }
+      - delay: 1s
+      - logger.log:
+          level: INFO
+          format: "OBD listen test: done, %u lines received while listening"
+          args: [id(frames)]
+      # Leave nothing running: a reset clears the co-processor's settings.
+      - output.turn_off: coproc_reset
+      - delay: 50ms
+      - output.turn_on: coproc_reset

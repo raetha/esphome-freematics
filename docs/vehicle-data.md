@@ -37,3 +37,14 @@ Probably little on these two cars. Many recent cars connect the OBD port's CAN p
 3. Only then a bench probe: `ATSP 6`, `ATCSM1` if supported, `ATM1`, log what arrives for a few minutes with the engine running, `ATM0`.
 
 Meanwhile the battery voltage (the ESP32's own ADC) is vehicle data that needs no bus at all, and a voltage above about 13.2 V is a good sign the engine is running.
+
+## The owner's Volvo (2023 XC60 Recharge, plug-in hybrid)
+
+The owner's wish list (2026-11-20): the device tracker first, then VIN, fuel level, the hybrid battery's charge, and as much of what Volvo's cloud integration in Home Assistant shows as the car gives directly, without upsetting the bus. A listening test is allowed if it's careful.
+
+What's realistic, in order:
+
+1. **Listen** (`examples/bench-obd-listen.yaml`, built, not in any configuration): one minute with the bus fixed to 500 kbit/s, 11-bit IDs (`ATSP6`, no detection), silent mode tried (`ATCSM1`), car parked and on. Expected: little or nothing behind Volvo's gateway. If frames do arrive, they can be decoded without ever sending.
+2. **Ask with standard OBD-II requests**, only if the owner decides to allow sending (not built): while the car is on (12 V at 13.2 V or more) and only at the start and end of a trip, one request at a time, a second apart, to the engine controller's physical address rather than the broadcast one. Once, the supported-PID lists (`0100`, `0120`... `01A0`); then VIN (`0902`), fuel level (`012F`), hybrid battery remaining (`015B`, if supported), odometer (`01A6`, if supported). The stock firmware asked every second while driving and detected the protocol on the live bus, the likely causes of its dash alerts.
+3. **Volvo's own data** (doors, locks, windows, tyre pressures, charging state, service) uses manufacturer diagnostic identifiers that aren't publicly documented, and newer Volvos secure some of them: out of reach for now. The cloud integration stays the source for those.
+

@@ -131,6 +131,14 @@ With `packages/standby.yaml` uncommented in the car config, in the car (it never
 
 **Send back:** the SD card's log after a night or a weekend, and the 12 V battery's behaviour if anything seems off. To update it while it sleeps, start the car (or unplug and plug it back in): it stays awake for 10 minutes.
 
+## 7c. Listening to the OBD port (vehicle data, step one)
+
+Not part of any configuration. With the car parked and on (or ignition on), paste [examples/bench-obd-listen.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-obd-listen.yaml) over the config, install, and watch the logs: 30 s after it starts, it sets the co-processor up (fixed 500 kbit/s, silent mode if supported), listens for 60 s, stops, and resets the co-processor. Nothing is sent to the car.
+
+**Look for:** the co-processor's answers to `ATCSM1` (`OK` or `?`) and `ATSP6`, then any lines starting `<<<` while listening, and "done, N lines received while listening". Any dash message on the car during or after the test.
+
+**Send back:** the whole log, and whether the car showed anything. Then paste the normal config back.
+
 ## 8. The stock firmware, for comparison (optional)
 
 If the cellular module never answers in test 3: plug a computer into the other dongle (still on the stock firmware), open a serial monitor at 115200 baud, and power it up. The first lines show `TYPE:` (the co-processor version), `GNSS:` and the cellular module's start. That shows whether the same hardware's cellular works on that power, and how the stock firmware starts it.
