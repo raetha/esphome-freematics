@@ -65,11 +65,11 @@ Paste [examples/bench-modem-probe.yaml](https://github.com/raetha/esphome-freema
 
 If nothing answers at all, the next step is hardware: run test 3 again with the dongle in the car (powered from the OBD port), and if still nothing, test 8.
 
-## 3b. ESPHome's modem component on its own
+## 3b. ESPHome's modem component, then with the co-processor link
 
-Test 3 passed on 2026-11-20 (the module answered the first press, SIM ready, registered on LTE-M), yet the full config's modem component never hears it. Paste [examples/bench-modem-esphome.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-modem-esphome.yaml) over the config: ESPHome's modem component with the same power-key presses, and nothing else on the board running. Leave the logs open for three minutes. A PPP connection costs a few hundred bytes.
+Done on 2026-11-20: on its own, ESPHome's modem component synced in 2 s, and once the SIM was powered back up (`AT+CFUN=1`, now in the board package) LTE came up in 9 s. The full config still never hears the modem, so [examples/bench-modem-esphome.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-modem-esphome.yaml) now adds the co-processor link (GNSS) beside it, the likeliest piece to get in the way. Paste it over the config, install, and leave the logs open for two minutes. A PPP connection costs a few hundred bytes.
 
-**Look for:** "Cellular: modem synced" and "Cellular: PPP up" (it worked: something else in the full config gets in the way, and the next test adds the pieces back one at a time), or "Modem not responding at 115200 baud" (the modem component's own start-up is the problem).
+**Look for:** "Cellular: PPP up" and "GNSS fix" (both work together: the co-processor isn't it, and the next step adds the buzzer and SD card), or "Modem not responding at 115200 baud" (the co-processor link gets in the way).
 
 **Send back:** the whole log. Then paste the normal config back.
 

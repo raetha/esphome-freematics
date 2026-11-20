@@ -1,6 +1,9 @@
-# Bench test for ESPHome's modem component on its own: the same power-key
-# presses and modem settings as the board package, with nothing else on the
-# board running (no co-processor link, SD card, buzzer or uplink). The raw probe
+# Bench test for ESPHome's modem component: the same power-key presses and
+# modem settings as the board package, plus the co-processor link
+# (freematics_link, reading GNSS), and nothing else (no SD card, buzzer or
+# uplink). Without the co-processor link the modem synced and connected
+# (test 3b); the full config never hears the modem, so this checks whether
+# the co-processor link is what gets in the way. The raw probe
 # (bench-modem-probe.yaml) showed the module answers on these pins; this tells
 # whether ESPHome's modem component reaches it when nothing else is running. If it does,
 # something else in the full config gets in its way; if it doesn't, the
@@ -25,6 +28,11 @@ esphome:
       then:
         - script.execute: modem_power_on
 
+external_components:
+  - source: github://raetha/esphome-freematics@dev
+    refresh: 0s
+    components: [freematics_link]
+
 esp32:
   board: esp32dev
   flash_size: 16MB
@@ -35,6 +43,7 @@ logger:
   level: VERBOSE
   logs:
     modem: VERBOSE
+    freematics_link: DEBUG
     wifi: INFO
     api: INFO
     api.service: INFO
@@ -83,6 +92,23 @@ modem:
     - logger.log: "Cellular: PPP up"
   on_disconnect:
     - logger.log: "Cellular: PPP down"
+
+# The co-processor link exactly as in the board package
+uart:
+  - id: coproc
+    rx_pin: GPIO13
+    tx_pin: GPIO14
+    baud_rate: 115200
+    rx_buffer_size: 512
+
+freematics_link:
+  id: coproc_link
+  uart_id: coproc
+  reset_pin:
+    number: GPIO15
+    ignore_strapping_warning: true
+  gnss_interval: 2s
+  battery_interval: 0s
 
 output:
   - platform: gpio

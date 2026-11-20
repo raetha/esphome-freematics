@@ -79,6 +79,12 @@ modem:
   update_interval: 120s
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
+    # The modem component powers the SIM down (AT+CFUN=0) to write the APN, then
+    # sends AT+CFUN=4, which on the SIM7070 leaves the SIM off ("+CME ERROR: SIM
+    # failure" until a power cycle). Full functionality brings it back within a
+    # second; the component's own CFUN=1 later on changes nothing. Bench test 3b.
+    - delay: 1s
+    - modem.send_at: "AT+CFUN=1"
   on_connect:
     - logger.log: "Cellular: PPP up"
     - if:
