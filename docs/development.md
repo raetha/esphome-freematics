@@ -37,7 +37,7 @@ Claude sessions can compile too: the owner let Espressif's and PlatformIO's down
 
 Against a real Traccar server: download Traccar's platform-independent release (`traccar-other-<version>.zip` from its GitHub releases; it needs Java 17 or later), set `protocols.enable` to `teltonika` in `conf/traccar.xml`, start it with `java -jar tracker-server.jar conf/traccar.xml`, create a user and a device with the identifier `test` (`POST /api/users`, then `POST /api/devices` on port 8082), then run `TRACCAR_UDP=127.0.0.1:5027 pytest tests/test_traccar_server.py`.
 
-Testing on hardware: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
+Testing on hardware follows [bench-tests.md](bench-tests.md), one thing per test: on the bench first (12 V into the OBD plug, a USB cable for logs), then in one car, then the other. Keep a backup of each dongle's stock flash.
 
 ## Component checklist
 
