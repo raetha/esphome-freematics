@@ -62,7 +62,7 @@ async def to_code(config):
     await uart.register_uart_device(var, config)
     if reset := config.get(CONF_RESET_PIN):
         cg.add(var.set_reset_pin(await cg.gpio_pin_expression(reset)))
-    cg.add(var.set_gnss_interval(config[CONF_GNSS_INTERVAL]))
-    cg.add(var.set_battery_interval(config[CONF_BATTERY_INTERVAL]))
+    cg.add(var.set_gnss_interval(config[CONF_GNSS_INTERVAL].total_milliseconds))
+    cg.add(var.set_battery_interval(config[CONF_BATTERY_INTERVAL].total_milliseconds))
     for conf in config.get(CONF_ON_FIX, []):
         await automation.build_automation(var.get_fix_trigger(), [(Fix, "fix")], conf)
