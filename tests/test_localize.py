@@ -23,6 +23,11 @@ EXAMPLES = sorted(
 def test_examples_fetch_from_github_and_localize(example):
     text = example.read_text(encoding="utf-8")
     assert "!include" not in text, "examples must work when pasted on their own"
+    if example.name.startswith("bench-"):
+        # Bench probes stand alone: no packages, nothing to point at the checkout.
+        assert "packages:" not in text and "github://" not in text
+        assert localize.localize(text, Path("/repo")).strip() == text.strip()
+        return
     assert "url: https://github.com/raetha/esphome-freematics" in text
     out = localize.localize(text, Path("/repo"))
     assert "url:" not in out and "github://" not in out
