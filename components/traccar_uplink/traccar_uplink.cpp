@@ -1,6 +1,7 @@
 #include "traccar_uplink.h"
 
 #include <cmath>
+#include <cstdio>
 
 #include "esphome/core/application.h"
 #include "esphome/core/log.h"
@@ -131,11 +132,19 @@ void TraccarUplink::receive_() {
     ssize_t len = this->socket_->recvfrom(buf, sizeof(buf), nullptr, nullptr);
     if (len <= 0)
       return;
-    if (!this->in_flight_)
+    char hex[3 * sizeof(buf) + 1] = {};
+    for (ssize_t j = 0; j < len && j < (ssize_t) sizeof(buf); j++)
+      snprintf(hex + 3 * j, 4, "%02X ", buf[j]);
+    if (!this->in_flight_) {
+      ESP_LOGD(TAG, "Reply with nothing waiting for one: %s", hex);
       continue;
+    }
     int accepted = ::trackcodec::parse_ack(buf, len, this->location_packet_id_);
-    if (accepted < 0)
+    if (accepted < 0) {
+      ESP_LOGW(TAG, "Reply that isn't the acknowledgement expected (location packet %u): %s", this->location_packet_id_,
+               hex);
       continue;
+    }
     size_t n = std::min<size_t>(this->in_flight_count_, this->queue_.size());
     this->queue_.pop_front(n);
     this->records_sent_ += n;

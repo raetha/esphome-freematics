@@ -6,17 +6,22 @@
 
 substitutions:
   lte_back_after: 30s     # Wi-Fi gone this long: turn LTE back on
+  lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
 
 wifi:
   reboot_timeout: 0s      # never reboot because the car is away from home
   on_connect:
-    - logger.log: "Wi-Fi up: turning LTE off"
     - if:
         condition:
-          not:
-            script.is_running: modem_power_on
+          lambda: return !${lte_on_wifi};
         then:
-          - modem.disable:
+          - logger.log: "Wi-Fi up: turning LTE off"
+          - if:
+              condition:
+                not:
+                  script.is_running: modem_power_on
+              then:
+                - modem.disable:
   on_disconnect:
     - delay: ${lte_back_after}
     - if:
@@ -39,6 +44,8 @@ esphome:
                 script.is_running: modem_power_on
         - if:
             condition:
-              wifi.connected:
+              and:
+                - wifi.connected:
+                - lambda: return !${lte_on_wifi};
             then:
               - modem.disable:
