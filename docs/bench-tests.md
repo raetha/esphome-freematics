@@ -78,18 +78,20 @@ Done on 2026-11-20: on its own, ESPHome's modem component synced in 2 s, and onc
 
 ## 4. Does ESPHome's modem component bring LTE up?
 
-Only after test 3 got answers. In the normal config, under `substitutions:` add:
+Only after test 3 got answers. In the normal config (the car config from this repository, with test build 0.1.0-dev.16 or later), under `substitutions:` add:
 
 ```yaml
   lte_on_wifi: "true"           # LTE stays on beside Wi-Fi, so its logs reach Device Builder
-  modem_pwrkey_press: 200ms     # the press that worked in test 3 (200ms, 1s or 1500ms)
-  modem_pwrkey_tries: "10"
-  modem_pwrkey_wait: 20s        # with a 1 s or longer press: give the module time to start before pressing again
 ```
 
-**Look for:** `Cellular: PPP up` and the modem's own lines. Traffic still goes over Wi-Fi (it's preferred whenever both are up), so this uses almost no cellular data.
+Then two starts, with the logs open over Wi-Fi in Device Builder ("Wirelessly"; they reconnect a few seconds after a start):
 
-**Send back:** three minutes of log. Then remove the three lines.
+1. Cold: unplug the dongle for 10 seconds and plug it back in.
+2. Warm: install the same config again over Wi-Fi.
+
+**Look for:** "Cellular: pressing PWRKEY", the modem component starting 8 s later, "restarting the module (AT+CFUN=1,1)" at its first answer, a second sync about 10 s later, then `Cellular: PPP up`, after both starts. "holding PWRKEY 2.5 s" means the module didn't answer and is being switched off and on again. Traffic still goes over Wi-Fi (it's preferred whenever both are up), so this uses almost no cellular data.
+
+**Send back:** both logs. Then remove the line.
 
 ## 5. Everything over LTE
 

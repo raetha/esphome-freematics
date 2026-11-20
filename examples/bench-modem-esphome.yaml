@@ -79,17 +79,33 @@ modem:
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
     - logger.log: "Cellular: modem synced"
-    # As in the board package: the first answer after boot restarts the module
-    # (it keeps power across ESP32 restarts), and every later one powers the SIM
-    # up (the modem component's AT+CFUN=4 leaves the SIM7070's SIM off).
     - if:
         condition:
           lambda: return !id(modem_restarted);
         then:
+          # First answer since the ESP32 started. Fix the module's serial speed
+          # (stored in the module), so bytes it hears while it starts can never
+          # set a wrong one; then restart it, as it may still be in a session
+          # from before an update or a crash (the board can't cut its power).
+          # It answers again in about 10 s, and that sync takes the else branch.
           - globals.set: { id: modem_restarted, value: "true" }
-          - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
-          - modem.send_at: "AT+CFUN=1,1"
+          - modem.send_at: "AT+IPR=115200"
+          - delay: 1s
+          - modem.send_at: "AT&W"
+          - delay: 1s
+          - if:
+              condition:
+                lambda: return true;
+              then:
+                - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
+                - modem.send_at: "AT+CFUN=1,1"
+              else:
+                - modem.send_at: "AT+CFUN=1"
         else:
+          # The modem component powers the SIM down (AT+CFUN=0) to write the
+          # APN, then sends AT+CFUN=4, which on the SIM7070 leaves the SIM off
+          # ("+CME ERROR: SIM failure" until a power cycle). Full
+          # functionality brings it back within a second. Bench test 3b.
           - delay: 1s
           - modem.send_at: "AT+CFUN=1"
   on_connect:
@@ -153,20 +169,30 @@ script:
       - delay: !lambda return ms;
       - output.turn_off: buzzer
       - delay: 150ms
-  # The board package's power-on: enable the modem component, then press the
-  # power key (200 ms, as the Freematics library does) until it has synced.
+  # The board package's power-on, copied (see its comments).
   - id: modem_power_on
     then:
-      - modem.enable:
       - repeat:
-          count: 5
+          count: 6
           then:
             - if:
                 condition:
                   lambda: return !id(modem_synced);
                 then:
+                  - if:
+                      condition:
+                        lambda: return iteration % 3 == 2;
+                      then:
+                        - logger.log: "Cellular: no answer; holding PWRKEY 2.5 s to switch the module off"
+                        - modem.disable:
+                        - output.turn_on: modem_pwrkey
+                        - delay: 2500ms
+                        - output.turn_off: modem_pwrkey
+                        - delay: 5s
                   - logger.log: "Cellular: pressing PWRKEY"
                   - output.turn_on: modem_pwrkey
                   - delay: 200ms
                   - output.turn_off: modem_pwrkey
+                  - delay: 8s
+                  - modem.enable:
                   - delay: 10s

@@ -16,8 +16,9 @@ substitutions:
   beep_on_network: "true"       # a 50 ms beep when Wi-Fi or cellular comes up, as the stock firmware does
   modem_restart_on_boot: "true" # restart the module the first time it answers after each boot (it keeps power across ESP32 restarts)
   modem_pwrkey_press: 200ms     # the Freematics library's press
-  modem_pwrkey_tries: "5"       # presses until the module answers
-  modem_pwrkey_wait: 10s        # between presses; longer with a long press, which can switch a started module off
+  modem_pwrkey_tries: "6"       # presses until the module answers; every third try first switches it off (a stuck module)
+  modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
+  modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
   modem_reboot_timeout: 0s      # reboot when LTE stays down this long; 0s: never (Wi-Fi-first turns LTE off at home)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
@@ -82,15 +83,26 @@ modem:
     - globals.set: { id: modem_synced, value: "true" }
     - if:
         condition:
-          lambda: return ${modem_restart_on_boot} && !id(modem_restarted);
+          lambda: return !id(modem_restarted);
         then:
-          # First answer since the ESP32 started: restart the module, which
-          # may still be in a session from before an update or a crash (the
-          # board can't cut its power). It answers again in about 10 s, and
-          # that sync takes the branch below.
+          # First answer since the ESP32 started. Fix the module's serial speed
+          # (stored in the module), so bytes it hears while it starts can never
+          # set a wrong one; then restart it, as it may still be in a session
+          # from before an update or a crash (the board can't cut its power).
+          # It answers again in about 10 s, and that sync takes the else branch.
           - globals.set: { id: modem_restarted, value: "true" }
-          - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
-          - modem.send_at: "AT+CFUN=1,1"
+          - modem.send_at: "AT+IPR=115200"
+          - delay: 1s
+          - modem.send_at: "AT&W"
+          - delay: 1s
+          - if:
+              condition:
+                lambda: return ${modem_restart_on_boot};
+              then:
+                - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
+                - modem.send_at: "AT+CFUN=1,1"
+              else:
+                - modem.send_at: "AT+CFUN=1"
         else:
           # The modem component powers the SIM down (AT+CFUN=0) to write the
           # APN, then sends AT+CFUN=4, which on the SIM7070 leaves the SIM off
@@ -129,12 +141,16 @@ script:
       - delay: !lambda return ms;
       - output.turn_off: buzzer
       - delay: 150ms
-  # Press PWRKEY (200 ms, as the Freematics library does) until the module
-  # answers (a short press doesn't power off a module that's already on).
+  # Press PWRKEY (200 ms, as the Freematics library does), let the module boot,
+  # and only then let ESPHome's modem component talk to it: its recovery bytes
+  # (a "+++" escape, CMUX close frames) reaching a module that is still booting
+  # left it silent until the power was cut, every time (bench test 3b). A
+  # short press doesn't switch off a module that's already on. Every third try
+  # first holds the key 2.5 s, which switches a stuck module off (as the
+  # library's end() does), so the next press starts it afresh.
   # packages/wifi-first.yaml turns LTE off again if Wi-Fi is already up.
   - id: modem_power_on
     then:
-      - modem.enable:
       - repeat:
           count: ${modem_pwrkey_tries}
           then:
@@ -142,10 +158,22 @@ script:
                 condition:
                   lambda: return !id(modem_synced);
                 then:
+                  - if:
+                      condition:
+                        lambda: return iteration % 3 == 2;
+                      then:
+                        - logger.log: "Cellular: no answer; holding PWRKEY 2.5 s to switch the module off"
+                        - modem.disable:
+                        - output.turn_on: modem_pwrkey
+                        - delay: 2500ms
+                        - output.turn_off: modem_pwrkey
+                        - delay: 5s
                   - logger.log: "Cellular: pressing PWRKEY"
                   - output.turn_on: modem_pwrkey
                   - delay: ${modem_pwrkey_press}
                   - output.turn_off: modem_pwrkey
+                  - delay: ${modem_boot_wait}
+                  - modem.enable:
                   - delay: ${modem_pwrkey_wait}
 
 globals:
