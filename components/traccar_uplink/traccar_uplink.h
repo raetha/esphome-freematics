@@ -1,9 +1,7 @@
 #pragma once
 
-#include <deque>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
@@ -16,6 +14,7 @@
 #include "esphome/components/time/real_time_clock.h"
 #endif
 
+#include "record_queue.h"
 #include "teltonika.h"
 #include "tracker.h"
 
@@ -23,10 +22,11 @@ namespace esphome::traccar_uplink {
 
 using ::trackcodec::Decision;
 using ::trackcodec::Record;
+using ::trackcodec::RecordQueue;
 using ::trackcodec::Tracker;
 using ::trackcodec::TrackerConfig;
 
-class TraccarUplink : public Component {
+class TraccarUplink final : public Component {
  public:
   void setup() override;
   void loop() override;
@@ -49,8 +49,8 @@ class TraccarUplink : public Component {
 #endif
 
   /// A valid GNSS fix: date ddmmyy and time hhmmsscc (UTC) as the co-processor reports them.
-  void add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh,
-               float course_deg, uint8_t satellites);
+  void add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh, float course_deg,
+               uint8_t satellites);
   /// Send what's queued at the next chance instead of waiting for send_interval.
   void flush() { this->flush_requested_ = true; }
 
@@ -84,8 +84,8 @@ class TraccarUplink : public Component {
 #endif
 
   Tracker tracker_;
-  std::deque<Record> queue_;
-  std::vector<Record> batch_;
+  RecordQueue queue_;
+  std::unique_ptr<Record[]> batch_;  // NOLINT(cppcoreguidelines-avoid-c-arrays)
   uint8_t buf_[1024];
   socket::Ipv4Resolve resolver_;
   std::unique_ptr<socket::UDPSocket> socket_;
@@ -101,7 +101,7 @@ class TraccarUplink : public Component {
   uint32_t last_tick_{0};
   uint32_t resolve_retry_at_{0};
 
-  // Unix time of the last fix, and millis() then, so time keeps counting between fixes.
+  // Unix time of the last fix, and the loop time then, so time keeps counting between fixes.
   uint32_t last_unix_{0};
   uint32_t last_unix_millis_{0};
 

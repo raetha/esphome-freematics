@@ -33,7 +33,8 @@ class Tracker {
     this->last_fix_ = now;
     this->has_fix_ = true;
     bool fast = speed_kmh >= this->config_.moving_speed_kmh;
-    if (fast) this->last_fast_ = now;
+    if (fast)
+      this->last_fast_ = now;
 
     if (!this->moving_) {
       if (fast) {
@@ -61,8 +62,10 @@ class Tracker {
   // Time passing without a fix (no signal, GNSS off). A heartbeat without a
   // location keeps the device alive in Traccar while parked.
   Decision on_tick(uint32_t now) {
-    if (this->moving_ || this->config_.heartbeat_s == 0) return Decision::NONE;
-    if (this->has_fix_ && now - this->last_fix_ < 10) return Decision::NONE;  // fixes are flowing
+    if (this->moving_ || this->config_.heartbeat_s == 0)
+      return Decision::NONE;
+    if (this->has_fix_ && now - this->last_fix_ < 10)
+      return Decision::NONE;  // fixes are flowing
     if (!this->has_record_ || now - this->last_record_ >= this->config_.heartbeat_s) {
       this->last_record_ = now;
       this->has_record_ = true;
@@ -73,7 +76,8 @@ class Tracker {
 
   static float angle_between(float a, float b) {
     float d = std::fabs(a - b);
-    while (d >= 360) d -= 360;
+    while (d >= 360)
+      d -= 360;
     return d > 180 ? 360 - d : d;
   }
 

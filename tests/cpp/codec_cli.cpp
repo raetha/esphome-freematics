@@ -9,10 +9,13 @@
 //   track <moving_speed> <stop_delay> <moving_interval> <turn_angle> <min_turn> <heartbeat> <n>
 //     then n lines: fix <time> <speed> <course> | tick <time>
 //   -> one decision per line: NONE RECORD START STOP HEARTBEAT
+//   queue <capacity> <n> then n ops: push <time> | pop <count> | erase <index>
+//   -> after each op: the record times in order, or "-" when empty, and "full" when full
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
+#include "record_queue.h"
 #include "teltonika.h"
 #include "tracker.h"
 
@@ -39,7 +42,8 @@ int main() {
       }
       uint8_t buf[2048];
       size_t len = encode_packet(buf, sizeof(buf), pid, lpid, id, rs.data(), rs.size());
-      for (size_t i = 0; i < len; i++) std::printf("%02x", buf[i]);
+      for (size_t i = 0; i < len; i++)
+        std::printf("%02x", buf[i]);
       std::printf("\n");
     } else if (!std::strcmp(cmd, "ack")) {
       char hex[64];
@@ -47,7 +51,8 @@ int main() {
       std::scanf("%63s %u", hex, &lpid);
       uint8_t b[32];
       size_t n = std::strlen(hex) / 2;
-      for (size_t i = 0; i < n; i++) std::sscanf(hex + 2 * i, "%2hhx", &b[i]);
+      for (size_t i = 0; i < n; i++)
+        std::sscanf(hex + 2 * i, "%2hhx", &b[i]);
       std::printf("%d\n", parse_ack(b, n, lpid));
     } else if (!std::strcmp(cmd, "unix")) {
       unsigned d, t;
@@ -76,6 +81,31 @@ int main() {
           d = tr.on_tick(t);
         }
         std::printf("%s\n", names[static_cast<int>(d)]);
+      }
+    } else if (!std::strcmp(cmd, "queue")) {
+      unsigned cap, n;
+      std::scanf("%u %u", &cap, &n);
+      RecordQueue q;
+      q.init(cap);
+      for (unsigned i = 0; i < n; i++) {
+        char op[8];
+        unsigned arg;
+        std::scanf("%7s %u", op, &arg);
+        if (!std::strcmp(op, "push")) {
+          Record r{};
+          r.time = arg;
+          if (!q.push_back(r))
+            std::printf("rejected ");
+        } else if (!std::strcmp(op, "pop")) {
+          q.pop_front(arg);
+        } else {
+          q.erase(arg);
+        }
+        if (q.empty())
+          std::printf("-");
+        for (size_t j = 0; j < q.size(); j++)
+          std::printf("%s%u", j ? "," : "", q.at(j).time);
+        std::printf("%s\n", q.full() ? " full" : "");
       }
     }
   }

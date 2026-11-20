@@ -213,3 +213,60 @@ def test_no_heartbeats_when_off(cli):
         "NONE",
         "NONE",
     ]
+
+
+def queue(cli, capacity, ops):
+    lines = [f"queue {capacity} {len(ops)}"] + [
+        " ".join(str(x) for x in op) for op in ops
+    ]
+    return cli("\n".join(lines) + "\n")
+
+
+def test_queue_fills_wraps_and_keeps_order(cli):
+    ops = [
+        ("push", 1),
+        ("push", 2),
+        ("push", 3),
+        ("push", 4),
+        ("pop", 2),
+        ("push", 5),
+        ("push", 6),
+    ]
+    # cli() splits on whitespace, so "full" and "rejected" come out as separate items
+    assert queue(cli, 3, ops) == [
+        "1",
+        "1,2",
+        "1,2,3",
+        "full",
+        "rejected",
+        "1,2,3",
+        "full",
+        "3",
+        "3,5",
+        "3,5,6",
+        "full",
+    ]
+
+
+def test_queue_erase_keeps_the_rest_in_order(cli):
+    ops = [
+        ("push", 1),
+        ("push", 2),
+        ("pop", 1),
+        ("push", 3),
+        ("push", 4),
+        ("erase", 1),
+        ("erase", 9),
+        ("pop", 9),
+    ]
+    assert queue(cli, 3, ops) == [
+        "1",
+        "1,2",
+        "2",
+        "2,3",
+        "2,3,4",
+        "full",
+        "2,4",
+        "2,4",
+        "-",
+    ]

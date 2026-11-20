@@ -6,6 +6,7 @@ from esphome import automation
 from esphome.components import sensor, socket, time
 from esphome.const import CONF_ID, CONF_PORT, CONF_TIME_ID
 
+DOMAIN = "traccar_uplink"
 CODEOWNERS = ["@raetha"]
 DEPENDENCIES = ["network"]
 AUTO_LOAD = ["socket"]
@@ -112,7 +113,7 @@ async def to_code(config):
 @automation.register_action(
     "traccar_uplink.flush",
     FlushAction,
-    cv.Schema({cv.GenerateID(): cv.use_id(TraccarUplink)}),
+    cv.maybe_simple_value({cv.GenerateID(): cv.use_id(TraccarUplink)}, key=CONF_ID),
     synchronous=True,
 )
 async def flush_to_code(config, action_id, template_arg, args):
