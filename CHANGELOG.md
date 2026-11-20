@@ -29,6 +29,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 
 ### Internal
 
+- A simulated day through the tracking filter and encoder checks the data estimates (`tests/test_simulation.py`).
 - CI also builds each example with its optional packages switched on.
 - The Teltonika encoder is checked against a real Traccar server (`tests/test_traccar_server.py`, run when `TRACCAR_UDP` is set).
 - Components follow ESPHome's own rules for components (clang-format, clang-tidy, no memory allocation while running, a component test config), checked in CI.
