@@ -105,6 +105,21 @@ def decode(packet: bytes) -> dict:
     }
 
 
+def test_altitude_is_sent_when_known(cli):
+    t = 1767225600
+    lines = [
+        "packet 1 1 ABCDEFGH 3",
+        f"{t} 2 40.7 -74.0 50 90 9 0 -1 123",
+        # below sea level: 0, as Traccar reads it unsigned
+        f"{t + 10} 2 40.7 -74.0 50 90 9 0 -1 -20",
+        f"{t + 20} 1 40.7 -74.0 50 90 9 0 -1",  # unknown: no altitude field
+    ]
+    packet = bytes.fromhex(cli("\n".join(lines) + "\n")[0])
+    a, b, c = decode(packet)["records"]
+    assert a["alt"] == 123 and b["alt"] == 0 and "alt" not in c
+    assert a["speed"] == 50 and a["sats"] == 9 and abs(a["course"] - 90) < 1.5
+
+
 def test_packet_decodes_as_traccar_reads_it(cli):
     t = int(datetime(2026, 11, 19, 18, 30, 5, tzinfo=UTC).timestamp())
     lines = [

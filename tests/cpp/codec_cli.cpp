@@ -36,10 +36,16 @@ int main() {
         std::scanf("%u %u %f %f %f %f %u %u %d", &t, &has, &r.latitude, &r.longitude, &r.speed_kmh, &r.course_deg,
                    &sats, &mv, &motion);
         r.time = t;
-        r.has_location = has;
+        r.has_location = has != 0;
         r.satellites = sats;
         r.battery_mv = mv;
         r.motion = motion;
+        if (has == 2) {  // a location with altitude: one more field, metres
+          int alt;
+          std::scanf("%d", &alt);
+          r.has_altitude = true;
+          r.altitude_m = static_cast<int16_t>(alt);
+        }
       }
       uint8_t buf[2048];
       size_t len = encode_packet(buf, sizeof(buf), pid, lpid, id, rs.data(), rs.size());

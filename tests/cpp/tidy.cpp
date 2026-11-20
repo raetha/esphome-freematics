@@ -7,5 +7,6 @@
 #include "link_parse.h"
 #include "backlog.h"
 #include "ring_file.h"
+#include "pending_ops.h"
 #include "log_line.h"
 #include "freematics_text.h"

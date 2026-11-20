@@ -93,7 +93,7 @@ Record TraccarUplink::base_record_(uint32_t time, Decision why) {
 }
 
 void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh,
-                            float course_deg, uint8_t satellites) {
+                            float course_deg, uint8_t satellites, float altitude_m) {
   uint32_t unix = ::trackcodec::gnss_to_unix(ddmmyy, hhmmsscc);
   if (unix == 0 && !this->now_(&unix))
     return;  // no time yet: nothing useful to record
@@ -110,6 +110,10 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
   r.speed_kmh = speed_kmh;
   r.course_deg = course_deg;
   r.satellites = satellites;
+  if (this->altitude_ && !std::isnan(altitude_m)) {
+    r.has_altitude = true;
+    r.altitude_m = static_cast<int16_t>(std::lround(std::clamp(altitude_m, -32768.0f, 32767.0f)));
+  }
   this->enqueue_(r);
 
   if (why == Decision::START) {

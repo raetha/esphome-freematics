@@ -76,6 +76,8 @@ int main(int argc, char **argv) {
     r.speed_kmh = speed;
     r.course_deg = course;
     r.satellites = 10;
+    r.has_altitude = true;  // the default: altitude on
+    r.altitude_m = 150;
     r.motion = -1;
     if (d == Decision::START || d == Decision::STOP || d == Decision::HEARTBEAT) {
       r.motion = tracker.moving() ? 1 : 0;

@@ -25,6 +25,7 @@ CONF_TURN_ANGLE = "turn_angle"
 CONF_MIN_TURN_INTERVAL = "min_turn_interval"
 CONF_HEARTBEAT_INTERVAL = "heartbeat_interval"
 CONF_START_FIXES = "start_fixes"
+CONF_ALTITUDE = "altitude"
 CONF_START_DISTANCE = "start_distance"
 CONF_ON_MOTION_START = "on_motion_start"
 CONF_ON_MOTION_STOP = "on_motion_stop"
@@ -33,7 +34,7 @@ CONF_PROTOCOL = "protocol"
 PROTOCOLS = {"teltonika": 5027, "freematics": 5170}  # and their default ports
 
 # Bump when trackcodec::Record's layout changes, so stored files start afresh.
-RECORD_FORMAT = 1
+RECORD_FORMAT = 2
 
 traccar_uplink_ns = cg.esphome_ns.namespace("traccar_uplink")
 TraccarUplink = traccar_uplink_ns.class_("TraccarUplink", cg.Component)
@@ -82,6 +83,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_TURN_ANGLE, default=30.0): cv.float_range(min=5, max=180),
             cv.Optional(CONF_MIN_TURN_INTERVAL, default="3s"): _seconds,
             cv.Optional(CONF_HEARTBEAT_INTERVAL, default="15min"): _seconds,
+            # 2 bytes per located record (about 7% more data while driving)
+            cv.Optional(CONF_ALTITUDE, default=True): cv.boolean,
             cv.Optional(CONF_START_FIXES, default=3): cv.int_range(min=1, max=30),
             cv.Optional(CONF_START_DISTANCE, default="50m"): cv.All(
                 cv.distance, cv.Range(min=0, max=1000)
@@ -101,6 +104,7 @@ async def to_code(config):
     cg.add(var.set_host(config[CONF_HOST]))
     cg.add(var.set_port(config.get(CONF_PORT, PROTOCOLS[config[CONF_PROTOCOL]])))
     cg.add(var.set_freematics_protocol(config[CONF_PROTOCOL] == "freematics"))
+    cg.add(var.set_altitude(config[CONF_ALTITUDE]))
     cg.add(var.set_device_id(config[CONF_DEVICE_ID]))
     cg.add(var.set_send_interval(config[CONF_SEND_INTERVAL]))
     cg.add(var.set_ack_timeout(config[CONF_ACK_TIMEOUT]))

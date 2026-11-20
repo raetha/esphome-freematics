@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 #include <memory>
 #include <string>
 
@@ -47,6 +49,7 @@ class TraccarUplink final : public Component {
   /// Traccar's Freematics text protocol instead of GH3000: unacknowledged, so
   /// records count as delivered once sent; a login event checks the server answers.
   void set_freematics_protocol(bool on) { this->freematics_ = on; }
+  void set_altitude(bool on) { this->altitude_ = on; }
   void set_send_interval(uint32_t ms) { this->send_interval_ = ms; }
   void set_ack_timeout(uint32_t ms) { this->ack_timeout_ = ms; }
   void set_max_queue(uint16_t n) { this->max_queue_ = n; }
@@ -65,8 +68,9 @@ class TraccarUplink final : public Component {
 #endif
 
   /// A valid GNSS fix: date ddmmyy and time hhmmsscc (UTC) as the co-processor reports them.
+  /// altitude_m: NAN when unknown; sent only with set_altitude(true).
   void add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh, float course_deg,
-               uint8_t satellites);
+               uint8_t satellites, float altitude_m = NAN);
   /// Send what's queued at the next chance instead of waiting for send_interval.
   void flush() { this->flush_requested_ = true; }
 
@@ -113,6 +117,7 @@ class TraccarUplink final : public Component {
   uint8_t in_flight_count_{0};
   uint8_t location_packet_id_{0};
   bool freematics_{false};
+  bool altitude_{true};
   bool login_answered_{false};
   uint32_t last_login_{0};
   uint16_t packet_id_{0};

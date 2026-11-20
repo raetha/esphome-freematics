@@ -16,6 +16,7 @@ substitutions:
   traccar_moving_speed: "6"           # km/h: at or above, the car is moving
   traccar_moving_interval: 10s        # a fix at least this often while moving
   traccar_turn_angle: "30"            # degrees: a turn this sharp records a fix early
+  traccar_altitude: "true"             # send altitude: 2 bytes per position, about 7% more data while driving
   traccar_start_fixes: "3"             # a trip starts after this many fast fixes in a row (2 s apart)...
   traccar_start_distance: 50m          # ...this far from where the car was parked (GPS drift doesn't start trips)
   traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
@@ -31,6 +32,7 @@ traccar_uplink:
   moving_speed: ${traccar_moving_speed}
   moving_interval: ${traccar_moving_interval}
   turn_angle: ${traccar_turn_angle}
+  altitude: ${traccar_altitude}
   start_fixes: ${traccar_start_fixes}
   start_distance: ${traccar_start_distance}
   stop_delay: ${traccar_stop_delay}
@@ -46,4 +48,4 @@ script:
     then:
       - lambda: |-
           id(traccar).add_fix(id(gnss_date), id(gnss_time), id(gnss_lat), id(gnss_lon),
-                              id(gnss_kmh), id(gnss_course), id(gnss_sats));
+                              id(gnss_kmh), id(gnss_course), id(gnss_sats), id(gnss_alt));

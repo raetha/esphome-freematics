@@ -17,6 +17,7 @@ MULTI_CONF = True
 
 CONF_CAPACITY = "capacity"
 CONF_SYNC_INTERVAL = "sync_interval"
+CONF_WRITER_TASK = "writer_task"
 
 file_queue_ns = cg.esphome_ns.namespace("file_queue")
 FileQueue = file_queue_ns.class_("FileQueue", cg.Component)
@@ -38,6 +39,9 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(
             CONF_SYNC_INTERVAL, default="30s"
         ): cv.positive_time_period_milliseconds,
+        # Write from a task of its own, so the loop never waits for the card;
+        # false writes from the loop (each change takes tens of ms).
+        cv.Optional(CONF_WRITER_TASK, default=True): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -48,4 +52,5 @@ async def to_code(config):
     cg.add(var.set_path(config[CONF_PATH]))
     cg.add(var.set_capacity(config[CONF_CAPACITY]))
     cg.add(var.set_sync_interval(config[CONF_SYNC_INTERVAL]))
+    cg.add(var.set_writer_task(config[CONF_WRITER_TASK]))
     cg.add_define("USE_FILE_QUEUE")

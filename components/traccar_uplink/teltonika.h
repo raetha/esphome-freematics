@@ -26,7 +26,9 @@ struct Record {
   float speed_kmh;
   float course_deg;
   uint16_t battery_mv;  // 0: not sent (GH3000 IO 67)
-  bool has_location;    // false: a time-only record; Traccar keeps the last position
+  int16_t altitude_m;
+  bool has_location;  // false: a time-only record; Traccar keeps the last position
+  bool has_altitude;  // with a location: send altitude_m (2 bytes)
   uint8_t satellites;
   int8_t motion;  // -1: not sent; 0 or 1 (GH3000 IO 240)
 };
@@ -35,7 +37,7 @@ struct Record {
 inline size_t record_size(const Record &r) {
   size_t n = 4 + 1;  // time, global mask
   if (r.has_location)
-    n += 1 + 8 + 1 + 1 + 1;  // location mask, lat/lon, course, speed, sats
+    n += 1 + 8 + 1 + 1 + 1 + (r.has_altitude ? 2 : 0);  // location mask, lat/lon, altitude, course, speed, sats
   if (r.motion >= 0)
     n += 1 + 1 + 1;  // count, id, 1-byte value
   if (r.battery_mv > 0)
@@ -104,9 +106,11 @@ inline size_t encode_packet(uint8_t *out, size_t cap, uint16_t packet_id, uint8_
       global |= 0x04;
     put8(p, global);
     if (r.has_location) {
-      put8(p, 0x1D);  // latitude/longitude, course, speed, satellites
+      put8(p, r.has_altitude ? 0x1F : 0x1D);  // latitude/longitude, (altitude,) course, speed, satellites
       put_float(p, r.latitude);
       put_float(p, r.longitude);
+      if (r.has_altitude)  // Traccar reads it unsigned: below sea level reads as 0
+        put16(p, static_cast<uint16_t>(r.altitude_m < 0 ? 0 : r.altitude_m));
       float course = r.course_deg;
       while (course < 0)
         course += 360;

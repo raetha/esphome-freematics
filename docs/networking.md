@@ -61,4 +61,4 @@ While driving the native API is smaller; parked and idle, MQTT's longer keepaliv
 
 ## The low-data option
 
-Neither the native API nor MQTT carries timestamps or batches fixes, so the low-data configuration is the Traccar one: Teltonika GH3000 records over UDP, about 17 bytes per fix, batched and acknowledged, around 12 KB per hour of driving ([configurations.md](configurations.md)).
+Neither the native API nor MQTT carries timestamps or batches fixes, so the low-data configuration is the Traccar one: Teltonika GH3000 records over UDP, about 19 bytes per fix with altitude, batched and acknowledged, around 12 KB per hour of driving ([configurations.md](configurations.md)).

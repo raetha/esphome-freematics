@@ -6,7 +6,7 @@ The board package (`packages/freematics-oneplus-b.yaml`) is the same for every d
 | --- | --- | --- |
 | Package | `uplink-traccar.yaml` + the `traccar_uplink` component | `uplink-home-assistant.yaml` |
 | Transport | UDP to Traccar's Teltonika port, no tunnel | Native API dialled from the device, through WireGuard |
-| Wire format | Teltonika GH3000 (codec 7): 17 bytes per fix, batched, acknowledged | Protobuf state updates, batched every 2 s; HA pings every 20 s when idle |
+| Wire format | Teltonika GH3000 (codec 7): 19 bytes per fix with altitude (17 without), batched, acknowledged | Protobuf state updates, batched every 2 s; HA pings every 20 s when idle |
 | Driving, one hour (defaults) | about 12 KB | about 200 KB |
 | Parked away from Wi-Fi | about 0.4 KB an hour (a heartbeat every 15 min); with `packages/standby.yaml` asleep after 13 minutes, a few hundred bytes per 6-hourly report (estimated, not yet measured) | about 55 KB an hour while connected over LTE (no parked mode yet) |
 | A workday: one hour of driving, 8 hours parked at work, the rest at home on Wi-Fi | about 15 KB | about 650 KB |
@@ -18,13 +18,13 @@ The board package (`packages/freematics-oneplus-b.yaml`) is the same for every d
 
 The stock telelogger used a few hundred KB on a busy day and 10 to 15 KB on a typical one, logging GPS only, so the Traccar configuration is in the same range with every fix delivered and acknowledged.
 
-The Traccar figures come from a simulation through the real tracking filter and encoder (`tests/test_simulation.py`; IP and UDP headers and Traccar's answers included): an hour of town and highway driving makes about 380 records in 63 packets, 11.5 KB; 8 hours parked on LTE makes 32 heartbeats, 3.3 KB. Most of a packet's cost is fixed (about 80 bytes of headers and answer), so fewer, fuller packets save the most:
+The Traccar figures come from a simulation through the real tracking filter and encoder (`tests/test_simulation.py`; IP and UDP headers and Traccar's answers included): an hour of town and highway driving makes about 385 records in 64 packets, 12.3 KB with altitude (11.5 KB without, `traccar_altitude: "false"`); 8 hours parked on LTE makes 32 heartbeats, 3.3 KB. Most of a packet's cost is fixed (about 80 bytes of headers and answer), so fewer, fuller packets save the most:
 
 | Setting (substitution) | Driving, one hour | Parked on LTE, 8 hours |
 | --- | --- | --- |
-| Defaults: send every 60 s, heartbeat every 15 min | 11.5 KB | 3.3 KB |
-| `traccar_send_interval: 120s` | 9.0 KB | |
-| `traccar_send_interval: 300s` | 7.6 KB | |
+| Defaults: send every 60 s, heartbeat every 15 min | 12.3 KB | 3.3 KB |
+| `traccar_send_interval: 120s` | 9.9 KB | |
+| `traccar_send_interval: 300s` | 8.4 KB | |
 | `traccar_heartbeat_interval: 30min` | | 1.6 KB |
 | `traccar_heartbeat_interval: 1h` | | 0.8 KB |
 

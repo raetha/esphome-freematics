@@ -221,6 +221,9 @@ globals:
   - id: gnss_fix_ms                # millis() of the last good fix; 0: none yet
     type: uint32_t
     initial_value: "0"
+  - id: gnss_alt                   # metres
+    type: float
+    initial_value: "NAN"
   - id: gnss_kmh
     type: float
     initial_value: "0"
@@ -274,6 +277,7 @@ freematics_link:
         id(gnss_lat) = fix.latitude;
         id(gnss_lon) = fix.longitude;
         id(gnss_fix_ms) = millis();
+        id(gnss_alt) = fix.altitude_m;
         id(gnss_kmh) = std::isnan(fix.speed_kmh) ? 0 : fix.speed_kmh;
         id(gnss_course) = std::isnan(fix.course_deg) ? 0 : fix.course_deg;
         id(gnss_sats) = fix.satellites;

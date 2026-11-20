@@ -8,6 +8,11 @@
 //   read:<i>:<n>  print the byte values of n records from the i-th oldest, or "read no"
 //   size          print the record count
 //   sync          sync to the disk; prints "sync ok", "sync no", and whether it was dirty
+// Through pending_ops.h, as the writer task uses it (room for 3 changes):
+//   qpush:<v>     queue a push; prints "qpush ok" or "qpush no"
+//   qpop:<n>      queue a pop; prints "qpop ok" or "qpop no"
+//   qsize         the size once everything queued is written, and "idle" or "busy"
+//   apply         apply what's queued to the file; prints "apply <n>" (-1: the file refused one)
 // The first line printed is how the file was opened.
 
 #include <cstdio>
@@ -15,6 +20,7 @@
 #include <cstring>
 #include <vector>
 
+#include "pending_ops.h"
 #include "ring_file.h"
 
 int main(int argc, char **argv) {
@@ -27,6 +33,8 @@ int main(int argc, char **argv) {
   static const char *const NAMES[] = {"loaded", "created", "replaced", "failed"};
   printf("%s\n", NAMES[static_cast<int>(q.open(argv[1], record_size, format, capacity))]);
   std::vector<uint8_t> rec(record_size);
+  ringfile::PendingOps pending;
+  pending.init(record_size, 3, q.size(), q.capacity());
   for (int i = 5; i < argc; i++) {
     const char *op = argv[i];
     if (strncmp(op, "push:", 5) == 0) {
@@ -54,6 +62,15 @@ int main(int argc, char **argv) {
     } else if (strcmp(op, "sync") == 0) {
       bool was_dirty = q.dirty();
       printf("sync %s%s\n", q.sync() ? "ok" : "no", was_dirty ? " (dirty)" : "");
+    } else if (strncmp(op, "qpush:", 6) == 0) {
+      memset(rec.data(), atoi(op + 6), rec.size());
+      printf("qpush %s\n", pending.push(rec.data()) ? "ok" : "no");
+    } else if (strncmp(op, "qpop:", 5) == 0) {
+      printf("qpop %s\n", pending.pop(atoi(op + 5)) ? "ok" : "no");
+    } else if (strcmp(op, "qsize") == 0) {
+      printf("qsize %u %s\n", static_cast<unsigned>(pending.size()), pending.idle() ? "idle" : "busy");
+    } else if (strcmp(op, "apply") == 0) {
+      printf("apply %d\n", pending.apply(q));
     } else if (strcmp(op, "size") == 0) {
       printf("size %u\n", static_cast<unsigned>(q.size()));
     } else {

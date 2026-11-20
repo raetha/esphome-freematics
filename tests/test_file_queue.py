@@ -56,6 +56,49 @@ def run(exe, tmp_path):
     return run
 
 
+def test_queued_changes_reach_the_file_in_order(run):
+    """The writer task's view: changes queue up, then land in one go."""
+    assert run("qpush:1", "qpush:2", "qsize", "size", "apply", "size", "qsize")[1:] == [
+        "qpush ok",
+        "qpush ok",
+        "qsize 2 busy",
+        "size 0",
+        "apply 2",
+        "size 2",
+        "qsize 2 idle",
+    ]
+    assert run("qpop:1", "qpush:3", "apply", "read:0:2") == [
+        "loaded",
+        "qpop ok",
+        "qpush ok",
+        "apply 2",
+        "read 2 3",
+    ]
+
+
+def test_queue_has_room_for_a_few_changes(run):
+    out = run("qpush:1", "qpush:2", "qpush:3", "qpush:4", "apply", "qpush:4")[1:]
+    assert out == ["qpush ok"] * 3 + ["qpush no", "apply 3", "qpush ok"]
+
+
+def test_queue_counts_toward_the_file_being_full(run):
+    # Capacity 5, 3 kept from before: the queue refuses a sixth record before
+    # the writer sees it.
+    run("push:1", "push:2", "push:3")
+    out = run("qpush:4", "qpush:5", "qpush:6", "qsize")
+    assert out == ["loaded", "qpush ok", "qpush ok", "qpush no", "qsize 5 busy"]
+
+
+def test_queued_pop_of_more_than_held(run):
+    assert run("qpush:1", "qpop:9", "qsize", "apply", "size")[1:] == [
+        "qpush ok",
+        "qpop ok",
+        "qsize 0 busy",
+        "apply 2",
+        "size 0",
+    ]
+
+
 def test_new_file_is_empty(run):
     assert run("size") == ["created", "size 0"]
     assert run("size") == ["loaded", "size 0"]
