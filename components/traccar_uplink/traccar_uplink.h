@@ -75,7 +75,7 @@ class TraccarUplink final : public Component {
   void flush() { this->flush_requested_ = true; }
 
   bool is_moving() const { return this->tracker_.moving(); }
-  /// Whether a trip may start now (the car is on); see Tracker::set_can_start.
+  /// Whether a trip may start now (the car was moved lately); see Tracker::set_can_start.
   void set_can_start(bool can) { this->tracker_.set_can_start(can); }
   size_t queue_size() const { return this->backlog_.size(); }
   uint32_t records_sent() const { return this->records_sent_; }

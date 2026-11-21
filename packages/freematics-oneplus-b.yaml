@@ -25,6 +25,7 @@ substitutions:
   sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
   coproc_log_level: DEBUG       # the co-processor link's log; VERBOSE also logs every GPS reply (with logger_level: VERBOSE)
   logger_level: DEBUG           # the device's log: DEBUG, VERBOSE, INFO, WARN...
+  motion_mg: "100"              # mg: a change this big between motion sensor samples counts as the car being moved (a door, getting in, the road)
 
 esphome:
   name: ${name}
@@ -33,6 +34,19 @@ esphome:
     name: raetha.esphome-freematics
     version: "0.1.0"
   on_boot:
+    # Find the motion sensor and have it flag movement (read every second).
+    - priority: -200
+      then:
+        - lambda: |-
+            uint8_t reg = 0x75, who = 0;
+            if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) != i2c::ERROR_OK)
+              ESP_LOGW("motion", "No motion sensor at 0x68: trips start on GPS alone");
+            else if (who == 0x20)
+              ESP_LOGI("motion", "Motion sensor: ICM-42627");
+            else
+              ESP_LOGW("motion", "Motion sensor with ID 0x%02X isn't supported yet: trips start on GPS alone", who);
+            id(motion_sensor) = who == 0x20;
+        - script.execute: { id: motion_arm, mg: !lambda "return ${motion_mg};" }
     - priority: -100
       then:
         - script.execute: modem_power_on
@@ -143,7 +157,82 @@ output:
     pin: GPIO25
     frequency: 2000Hz
 
+# The motion sensor (ICM-42627 on the Model B), on the same bus as in
+# Freematics' library.
+i2c:
+  id: imu_bus
+  sda: GPIO21
+  scl: GPIO22
+  scan: false
+
+interval:
+  # The motion sensor latches a flag when it's moved; reading clears it.
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (!id(motion_sensor))
+            return;
+          uint8_t reg = 0x37, status = 0;  // INT_STATUS2: wake-on-motion flags
+          if (id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1) != i2c::ERROR_OK || (status & 0x07) == 0)
+            return;
+          uint32_t now = millis();
+          if (id(motion_ms) == 0 || now - id(motion_ms) >= 60000)
+            ESP_LOGD("motion", "Moved");
+          id(motion_ms) = now | 1;
+
 script:
+  # The ICM-42627's wake-on-motion (TDK's ICM-426xx register map): the
+  # accelerometer alone in low-power mode at 50 Hz, a flag latched in
+  # INT_STATUS2 when any axis changes by more than mg between two samples.
+  # Awake, a flag means the car is being moved (trips start only then);
+  # packages/standby.yaml sets its own threshold before sleeping.
+  - id: motion_arm
+    mode: queued
+    parameters:
+      mg: int
+    then:
+      - lambda: |-
+          id(motion_arm_ok) = false;
+          if (!id(motion_sensor))
+            return;
+          auto put = [](uint8_t r, uint8_t v) {
+            uint8_t b[2] = {r, v};
+            return id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
+          };
+          if (mg <= 0) {                       // off: no flags, accelerometer off
+            put(0x76, 0x00);
+            put(0x57, 0x00);                   // SMD_CONFIG: wake-on-motion off
+            put(0x4E, 0x00);                   // PWR_MGMT0: accelerometer off
+            return;
+          }
+          const uint8_t threshold = std::min(255, mg * 256 / 1000);  // 1/256 g steps
+          bool ok = put(0x76, 0x00);           // register bank 0
+          ok &= put(0x50, 0x69);               // ACCEL_CONFIG0: +-2 g, 50 Hz
+          ok &= put(0x4E, 0x02);               // PWR_MGMT0: accelerometer low power, gyro off
+          delay(2);
+          ok &= put(0x76, 0x04);               // bank 4: the thresholds
+          ok &= put(0x4A, threshold);          // ACCEL_WOM_X_THR
+          ok &= put(0x4B, threshold);          // ACCEL_WOM_Y_THR
+          ok &= put(0x4C, threshold);          // ACCEL_WOM_Z_THR
+          ok &= put(0x76, 0x00);
+          delay(2);
+          ok &= put(0x66, 0x07);               // INT_SOURCE1: wake-on-motion on all axes
+          id(motion_arm_ok) = ok;
+          if (!ok)
+            ESP_LOGW("motion", "Couldn't set the motion sensor up");
+      - delay: 50ms                            # before switching wake-on-motion on
+      - lambda: |-
+          if (!id(motion_sensor) || mg <= 0 || !id(motion_arm_ok))
+            return;
+          uint8_t b[2] = {0x57, 0x05};         // SMD_CONFIG: wake-on-motion, compared with the previous sample
+          bool ok = id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
+          uint8_t reg = 0x37, status;
+          id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1);  // clear a flag set while setting up
+          if (ok)
+            ESP_LOGD("motion", "Motion sensor set to %d mg", mg);
+          else
+            ESP_LOGW("motion", "Couldn't set the motion sensor up");
+          id(motion_arm_ok) = ok;
   # A beep of ms milliseconds; beeps asked for together play one after another.
   # A short beep when Wi-Fi or cellular comes up, at most once in 10 minutes
   # (a network that keeps dropping the device would beep every minute).
@@ -216,6 +305,15 @@ script:
                         - modem.enable:
                   - delay: ${modem_pwrkey_wait}
 globals:
+  - id: motion_sensor            # a supported motion sensor answered
+    type: bool
+    initial_value: "false"
+  - id: motion_arm_ok            # the motion sensor took its settings
+    type: bool
+    initial_value: "false"
+  - id: motion_ms                # millis() when the motion sensor last flagged movement; 0: not since start
+    type: uint32_t
+    initial_value: "0"
   - id: modem_syncs              # module answers since the last connection
     type: uint8_t
     initial_value: "0"

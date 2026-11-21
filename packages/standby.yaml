@@ -42,12 +42,6 @@ deep_sleep:
 safe_mode:
   id: safe_mode_ctl
 
-i2c:
-  id: imu_bus
-  sda: GPIO21
-  scl: GPIO22
-  scan: true
-
 globals:
   - id: parked_s                # seconds the car has been off and still
     type: uint32_t
@@ -93,6 +87,8 @@ esphome:
                 esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(check_s) * 1000000ULL);
                 esp_deep_sleep_start();
               }
+              if (moved)
+                id(motion_ms) = millis() | 1;  // the motion that woke it counts for a trip start
               ESP_LOGI("standby", "Woke: %.2f V, %s", v,
                        car_on ? "the car is on" : moved ? "the car moved" : "heartbeat");
               id(heartbeat_wake) = !car_on && !moved;
@@ -103,17 +99,6 @@ esphome:
             gpio_hold_dis(GPIO_NUM_15);
             gpio_hold_dis(GPIO_NUM_25);
             gpio_deep_sleep_hold_dis();
-    # Say which motion sensor answers (once per start).
-    - priority: -200
-      then:
-        - lambda: |-
-            uint8_t reg = 0x75, who = 0;
-            if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) != i2c::ERROR_OK)
-              ESP_LOGW("standby", "No motion sensor at 0x68: no motion wake");
-            else if (who == 0x20)
-              ESP_LOGI("standby", "Motion sensor: ICM-42627 (motion wake on)");
-            else
-              ESP_LOGW("standby", "Motion sensor with ID 0x%02X isn't supported yet: no motion wake", who);
 
 interval:
   - interval: 10s
@@ -163,41 +148,16 @@ script:
             # The module's own power-down, as Freematics' library sends it
             - modem.send_at: !lambda 'return std::string("${modem_model}") == "SIM7070" ? "AT+CPOWD=1" : "AT+CPOF";'
             - delay: 3s
-      - lambda: |-
-          // ICM-42627 wake-on-motion (TDK's ICM-426xx register map): the
-          // accelerometer alone in low-power mode at 50 Hz, a flag latched in
-          // INT_STATUS2 when any axis changes by more than the threshold
-          // between two samples. The minute check reads the flag.
-          if (${standby_motion_mg} <= 0)
-            return;
-          uint8_t reg = 0x75, who = 0;
-          if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) != i2c::ERROR_OK || who != 0x20)
-            return;
-          auto put = [](uint8_t r, uint8_t v) {
-            uint8_t b[2] = {r, v};
-            return id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
-          };
-          const uint8_t threshold = std::min(255, ${standby_motion_mg} * 256 / 1000);  // 1/256 g steps
-          bool ok = put(0x76, 0x00);           // register bank 0
-          ok &= put(0x50, 0x69);               // ACCEL_CONFIG0: +-2 g, 50 Hz
-          ok &= put(0x4E, 0x02);               // PWR_MGMT0: accelerometer low power, gyro off
-          delay(2);
-          ok &= put(0x76, 0x04);               // bank 4: the thresholds
-          ok &= put(0x4A, threshold);          // ACCEL_WOM_X_THR
-          ok &= put(0x4B, threshold);          // ACCEL_WOM_Y_THR
-          ok &= put(0x4C, threshold);          // ACCEL_WOM_Z_THR
-          ok &= put(0x76, 0x00);
-          delay(2);
-          ok &= put(0x66, 0x07);               // INT_SOURCE1: wake-on-motion on all axes
-          delay(50);
-          ok &= put(0x57, 0x05);               // SMD_CONFIG: wake-on-motion, compared with the previous sample
-          reg = 0x37;
-          uint8_t status;
-          id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1);  // clear a flag set while setting up
-          if (ok)
-            ESP_LOGI("standby", "Motion wake set (%d mg)", ${standby_motion_mg});
-          else
-            ESP_LOGW("standby", "Couldn't set the motion sensor up: no motion wake");
+      # Wake-on-motion at the standby threshold; the minute check reads its flag.
+      - script.execute: { id: motion_arm, mg: !lambda "return ${standby_motion_mg};" }
+      - script.wait: motion_arm
+      - if:
+          condition:
+            lambda: return ${standby_motion_mg} > 0 && id(motion_arm_ok);
+          then:
+            - logger.log:
+                format: "Motion wake set (%d mg)"
+                args: ["${standby_motion_mg}"]
       - logger.log: "Standby: sleeping"
       - lambda: |-
           // Hold the power key released, the co-processor out of reset and

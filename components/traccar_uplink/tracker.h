@@ -35,7 +35,7 @@ class Tracker {
 
   bool moving() const { return this->moving_; }
 
-  // Whether a trip may start now: false while the car is off, so GPS drift
+  // Whether a trip may start now: false while the car sits still, so GPS drift
   // in a garage or a house never starts one. A trip under way isn't affected.
   void set_can_start(bool can) { this->can_start_ = can; }
 

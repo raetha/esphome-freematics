@@ -4,7 +4,6 @@ Ideas evaluated and set aside for now, and why. Check here before proposing some
 
 | Idea | Why not now |
 | --- | --- |
-| Trip start from the motion sensor when powered over USB (no 12 V to tell whether the car is on), as the telelogger wakes on a jolt | Wanted once USB-powered installs are in use (2026-11-21); `traccar_start_voltage: "0"` covers it meanwhile. |
 | Traccar's Freematics protocol (UDP 5170, what the stock firmware used) | Text, about 60 bytes per fix, and Traccar doesn't acknowledge position packets, so lost packets go unnoticed. GH3000 is about 17 bytes and acknowledged. |
 | Traccar's OsmAnd protocol | HTTP: hundreds of bytes of headers per fix. |
 | MQTT configuration | Not built: more data than Traccar, needs a broker, and ESPHome republishes discovery on every reconnect. Could be added as an example if wanted. |

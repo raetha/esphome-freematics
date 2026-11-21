@@ -19,7 +19,7 @@ substitutions:
   traccar_altitude: "true"            # send altitude: 2 bytes per position, about 7% more data while driving
   traccar_start_fixes: "3"            # a trip starts after this many fast fixes in a row (2 s apart)...
   traccar_start_distance: 50m         # ...this far from where the car was parked (GPS drift doesn't start trips)
-  traccar_start_voltage: "13.2"      # V: a trip starts only while the car is on (its 12 V system charging); "0" when powered over USB instead of the OBD port (no 12 V to read), or for bench tests
+  traccar_start_motion: "300"       # s: a trip starts only this soon after the motion sensor felt the car move (getting in, driving); "0": GPS alone
   traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
   traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
 
@@ -48,9 +48,11 @@ script:
   - id: on_gnss_fix
     then:
       - lambda: |-
-          // GPS drift with the car off (a garage, a house, a bench on USB) never
-          // starts a trip; the car being on is its 12 V system charging.
-          float start_v = ${traccar_start_voltage};
-          id(traccar).set_can_start(start_v <= 0 || id(battery_voltage).state >= start_v);
+          // GPS drift while the car sits still (a garage, a house, a desk)
+          // never starts a trip: the motion sensor must have felt it move.
+          // Without a supported sensor, GPS decides alone.
+          const uint32_t window_ms = ${traccar_start_motion} * 1000UL;
+          id(traccar).set_can_start(window_ms == 0 || !id(motion_sensor) ||
+                                    (id(motion_ms) != 0 && millis() - id(motion_ms) < window_ms));
           id(traccar).add_fix(id(gnss_date), id(gnss_time), id(gnss_lat), id(gnss_lon),
                               id(gnss_kmh), id(gnss_course), id(gnss_sats), id(gnss_alt));
