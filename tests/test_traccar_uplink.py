@@ -522,3 +522,35 @@ def test_freematics_login(cli):
     assert cli("login car1 1234\n") == ["car1#EV=1,TS=1234,ID=car1*CA"]
     assert cli("loginreply 1#EV=1,RX=1,TS=1234*7B\n") == ["1"]
     assert cli("loginreply 1#EV=2,RX=1\n") == ["0"]
+
+
+def test_trip_starts_only_while_the_car_is_on(cli):
+    """Drift with the car off starts no trip; once it's on, the count starts."""
+    lat, lon = PARKED
+    far = lat + 0.001  # 111 m
+    events = [
+        ("car", 0, 0),
+        ("at", 0, 0, 0, lat, lon),
+        ("at", 2, 20, 0, far, lon),
+        ("at", 4, 20, 0, far, lon),
+        ("at", 6, 20, 0, far, lon),  # three fast fixes 111 m away, but the car is off
+        ("car", 7, 1),
+        ("at", 8, 20, 0, far, lon),
+        ("at", 10, 20, 0, far, lon),
+        ("at", 12, 20, 0, far, lon),  # three since the car came on: start
+        ("car", 13, 0),  # off during the trip (stop-start at a light): the trip goes on
+        ("at", 22, 20, 0, far + 0.001, lon),
+    ]
+    assert track(cli, events, start_fixes=3, start_distance=50) == [
+        "NONE",
+        "HEARTBEAT",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+        "NONE",
+        "START",
+        "NONE",
+        "RECORD",
+    ]

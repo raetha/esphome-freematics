@@ -35,6 +35,10 @@ class Tracker {
 
   bool moving() const { return this->moving_; }
 
+  // Whether a trip may start now: false while the car is off, so GPS drift
+  // in a garage or a house never starts one. A trip under way isn't affected.
+  void set_can_start(bool can) { this->can_start_ = can; }
+
   // A valid fix at time now (Unix seconds). Returns whether to record it, and
   // why. Without a position (NaN), only the speed decides a trip's start.
   Decision on_fix(uint32_t now, float speed_kmh, float course_deg, float latitude = NAN, float longitude = NAN) {
@@ -47,7 +51,7 @@ class Tracker {
     if (!this->moving_) {
       if (!this->has_anchor_)
         this->anchor_(latitude, longitude);
-      this->fast_fixes_ = fast ? this->fast_fixes_ + 1 : 0;
+      this->fast_fixes_ = fast && this->can_start_ ? this->fast_fixes_ + 1 : 0;
       if (this->fast_fixes_ >= this->config_.start_fixes &&
           this->distance_m_(latitude, longitude) >= this->config_.start_distance_m) {
         this->moving_ = true;
@@ -135,6 +139,7 @@ class Tracker {
   float anchor_lat_{0};
   float anchor_lon_{0};
   uint8_t fast_fixes_{0};
+  bool can_start_{true};
 };
 
 }  // namespace trackcodec
