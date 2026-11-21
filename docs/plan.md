@@ -63,6 +63,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-21: Standby on USB power (some cars keep a USB socket on with the car off): the device sleeps once the motion sensor has felt nothing for `standby_after` and no trip is under way, and wakes on motion or for the heartbeat; on the OBD port the voltage still decides. `standby_on_usb: "false"` keeps a bench device awake. ESPHome's start-up hints (`flash_chip: winbond`, `sram1_as_iram`) left as they are: they would tie builds to one flash vendor and bootloader for a little IRAM the configs don't need.
+
 - 2026-11-21: Trip start now needs the motion sensor instead of the 12 V voltage, so it works the same on USB power (the owner powers some dongles from a USB socket): the board package arms the ICM-42627's wake-on-motion at 100 mg while awake and reads its latched flag every second, and a trip may start within 5 minutes of a flag. Standby still decides "car on" from the voltage; sleeping on USB power (still plus no motion) would be the next step.
 
 - 2026-11-21: Spurious short trips at home and at the office, with the device still: the card log of 2026-11-20 has one every 8 minutes or so at the office (on USB), each 3 minutes of records every 10 s, which Traccar turns into a trip from their speed. Weak indoor fixes pass the start rule (3 fast fixes, 50 m). Compared with the telelogger, which sends nothing with a position while parked (GPS off after 3 minutes without 2 km/h or a jolt, woken only by a 0.4 g jolt).

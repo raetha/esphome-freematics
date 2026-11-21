@@ -10,10 +10,13 @@
 # while the car is on or charging). Every standby_heartbeat it wakes fully to
 # report one record to Traccar, then sleeps again.
 #
-# The dongle isn't on a car when the voltage is below standby_min_voltage (on
-# USB on the bench): then it never sleeps. While it sleeps it can't be updated
-# over Wi-Fi: start the car, or unplug it and plug it back in, and it stays
-# awake for standby_after.
+# Powered over USB instead of the OBD port (the voltage reads below
+# standby_min_voltage), there's no 12 V to tell whether the car is on: it
+# sleeps once the motion sensor has felt nothing for standby_after (and no trip
+# is under way), and only motion or a heartbeat wakes it; standby_on_usb:
+# "false" keeps it awake on USB (a bench). While it sleeps it can't be updated
+# over Wi-Fi: start the car, move or tap the dongle, or unplug it and plug it
+# back in, and it stays awake for standby_after.
 #
 # It also wakes when the car moves while it sleeps (towing, someone getting
 # in): before sleeping it sets the motion sensor's wake-on-motion, which
@@ -27,7 +30,8 @@
 
 substitutions:
   standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
-  standby_min_voltage: "9.0"    # V: below, the dongle isn't on a car (USB): never sleep
+  standby_min_voltage: "9.0"    # V: below, the dongle is powered over USB, not the OBD port
+  standby_on_usb: "true"        # on USB power, sleep once the motion sensor has felt nothing for standby_after; "false": stay awake (a bench)
   standby_after: "600"          # s: car off and still this long, then sleep (Traccar's stop record goes out at 180 s)
   standby_check: "60"           # s: deep sleep between voltage checks (each costs about half a second awake)
   standby_heartbeat: "6"        # hours: wake fully to report one record this often; "0": never
@@ -65,7 +69,9 @@ esphome:
             if (timer_wake) {
               id(battery_voltage).update();
               float v = id(battery_voltage).state;
-              bool car_on = std::isnan(v) || v < ${standby_min_voltage} || v >= ${standby_voltage};
+              // On USB power there's no 12 V to read: only motion or a heartbeat wakes it.
+              bool usb = !std::isnan(v) && v < ${standby_min_voltage};
+              bool car_on = std::isnan(v) || (usb ? !${standby_on_usb} : v >= ${standby_voltage});
               // The ICM-42627's wake-on-motion flags (INT_STATUS2, cleared by reading)
               bool moved = false;
               uint8_t reg = 0x75, who = 0, status = 0;
@@ -104,9 +110,19 @@ interval:
   - interval: 10s
     then:
       - lambda: |-
+          // Still: on the OBD port, the car is off (its 12 V system isn't
+          // charging); on USB power, the motion sensor has felt nothing for
+          // the last 10 s (without a supported sensor, it never sleeps on USB).
           float v = id(battery_voltage).state;
-          bool car_off = !std::isnan(v) && v >= ${standby_min_voltage} && v < ${standby_voltage};
-          if (car_off && !id(traccar).is_moving())
+          bool still;
+          if (std::isnan(v))
+            still = false;
+          else if (v < ${standby_min_voltage})
+            still = ${standby_on_usb} && id(motion_sensor) &&
+                    (id(motion_ms) == 0 || millis() - id(motion_ms) >= 10000);
+          else
+            still = v < ${standby_voltage};
+          if (still && !id(traccar).is_moving())
             id(parked_s) += 10;
           else
             id(parked_s) = 0;

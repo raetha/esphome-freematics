@@ -118,7 +118,7 @@ With tests 2 to 6 passing: the dongle in the car on OBD power, with the SD packa
 
 ## 7b. Sleep while parked
 
-With `packages/standby.yaml` uncommented in the car config, in the car (it never sleeps on USB). Drive, park, and leave it: 3 minutes after stopping Traccar gets the stop record; 10 minutes after that the device logs "Standby: parked; sending what's waiting, then sleeping" and "Standby: sleeping", and goes quiet (the logs disconnect). Start the car: within a minute it wakes ("Woke: 14.x V, the car is on"), presses the modem's power key and tracks again. Left parked, it reports one record every 6 hours.
+With `packages/standby.yaml` uncommented in the car config, in the car (on USB power it sleeps once still for 10 minutes too; `standby_on_usb: "false"` keeps a bench device awake). Drive, park, and leave it: 3 minutes after stopping Traccar gets the stop record; 10 minutes after that the device logs "Standby: parked; sending what's waiting, then sleeping" and "Standby: sleeping", and goes quiet (the logs disconnect). Start the car: within a minute it wakes ("Woke: 14.x V, the car is on"), presses the modem's power key and tracks again. Left parked, it reports one record every 6 hours.
 
 **Look for:** the standby lines in the SD card's log, including "Motion sensor: ICM-42627" at start and "Motion wake set (150 mg)" before sleeping; in Traccar, the 6-hourly records while parked and the first record of the next trip. To try motion wake: once it's asleep, open and close a door, or rock the car: within a minute the log says "Woke: ... the car moved".
 
