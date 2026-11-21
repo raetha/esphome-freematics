@@ -1,0 +1,106 @@
+# One car reporting to Home Assistant through the Freematics integration
+# (https://github.com/raetha/ha-freematics): a device tracker and sensors without
+# Traccar, with little cellular data (docs/configurations.md).
+#
+# Paste this whole file into a new device in ESPHome Device Builder, change the
+# substitutions below, and install. Everything else comes from GitHub.
+# Secrets it uses (Device Builder -> Secrets): wifi_ssid, wifi_password,
+# freematics_api_key, and ha_webhook_url: the webhook URL the integration shows
+# when you add the device in Home Assistant.
+
+substitutions:
+  name: freematics-car1
+  friendly_name: Car 1
+  cell_apn: hologram
+  standby_uplink: ha_uplink            # for packages/standby.yaml below
+  # Optional settings, with their defaults: uncomment a line to change it.
+  # The board: cellular module, GPS, beeps, logs
+  # modem_model: SIM7070          # the cellular module: SIM7070 (SIM7070G), or SIM7600 (untested)
+  # modem_rx_pin: GPIO35          # the module's serial pins; co-processor version 1.3 boards use GPIO32...
+  # modem_tx_pin: GPIO2           # ...and GPIO33
+  # beep_on_boot: "true"          # a 200 ms beep when the firmware has started
+  # beep_on_network: "true"       # a 50 ms beep when Wi-Fi or cellular comes up, as the stock firmware does
+  # modem_restart_on_boot: "true" # restart the module the first time it answers after each boot (it keeps power across ESP32 restarts)
+  # modem_pwrkey_press: 200ms     # the Freematics library's press
+  # modem_pwrkey_tries: "6"       # presses until the module answers; every third try first switches it off (a stuck module)
+  # modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
+  # modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
+  # modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
+  # modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
+  # gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
+  # sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
+  # coproc_log_level: DEBUG       # the co-processor link's log; VERBOSE also logs every GPS reply (with logger_level: VERBOSE)
+  # logger_level: DEBUG           # the device's log: DEBUG, VERBOSE, INFO, WARN...
+  # motion_mg: "100"              # mg: a change this big between motion sensor samples counts as the car being moved (a door, getting in, the road)
+
+  # Wi-Fi first
+  # lte_back_after: 30s     # Wi-Fi gone this long: turn LTE back on
+  # wifi_pause_speed: "10"  # km/h: at or above, with no Wi-Fi connected, stop searching for Wi-Fi; "1000": never pause
+  # wifi_resume_after: "30" # seconds below that speed (or without a GNSS fix) before searching again
+  # wifi_power_save: light  # Wi-Fi power saving: light, or none if an access point keeps dropping the device
+  # lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
+
+  # Home Assistant integration (uplink-ha-webhook.yaml)
+  # ha_webhook_url: !secret ha_webhook_url  # the webhook URL the integration shows, kept in Device Builder's secrets
+  # ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
+  # ha_moving_interval: 10s           # a record at least this often while moving
+  # ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none
+  # ha_altitude: "true"               # send altitude (a byte or two per record)
+  # ha_start_motion: "300"            # s: a trip starts only this soon after the motion sensor felt the car move; "0": GPS alone
+
+  # SD card: log (sd-logs.yaml)
+  # sd_log_level: DEBUG       # what goes into the log on the card
+  # sd_log_max_size: 1MB      # two files at most: 2 MB
+
+  # Sleep while parked (standby.yaml)
+  # standby_uplink: traccar       # the uplink to empty before sleeping: traccar, or ha_uplink in the Home Assistant integration configuration
+  # standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
+  # standby_min_voltage: "9.0"    # V: below, the dongle is powered over USB, not the OBD port
+  # standby_on_usb: "true"        # on USB power, sleep once the motion sensor has felt nothing for standby_after; "false": stay awake (a bench)
+  # standby_after: "600"          # s: car off and still this long, then sleep (Traccar's stop record goes out at 180 s)
+  # standby_check: "60"           # s: deep sleep between voltage checks (each costs about half a second awake)
+  # standby_heartbeat: "6"        # hours: wake fully to report one record this often; "0": never
+  # standby_motion_mg: "150"      # mg: a change this big between samples wakes it (doors, towing); "0": no motion wake
+  # standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
+  # End of the optional settings.
+
+packages:
+  freematics:
+    url: https://github.com/raetha/esphome-freematics
+    ref: dev            # or a test build tag such as 0.1.0-dev.3
+    refresh: 0s         # fetch on every build while things are changing
+    files:
+      - packages/freematics-oneplus-b.yaml
+      - packages/wifi-first.yaml
+      - packages/uplink-ha-webhook.yaml
+      # Optional: the SD card, keeping the log on it
+      # - packages/sd-card.yaml
+      # - packages/sd-logs.yaml
+      # Optional: sleep while parked, waking when the car is turned on or moved
+      # - packages/standby.yaml
+      # Also reporting to Traccar: add uplink-traccar.yaml here and its
+      # traccar_host and traccar_device_id substitutions above.
+
+external_components:
+  - source: github://raetha/esphome-freematics@dev
+    refresh: 0s
+    components: [freematics_link, traccar_uplink, sd_card, file_queue, file_logger]
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    # More networks: another - ssid: / password: pair.
+
+# Updates and logs over the air from ESPHome Device Builder, while the device is
+# on Wi-Fi. On LTE the carrier's NAT keeps it unreachable, so neither uses data.
+ota:
+  - platform: esphome
+    encryption:                       # uses the API key below
+
+# Only so Device Builder can show logs: nothing connects unless a log window is
+# open. Ignore the device if Home Assistant offers to add it.
+api:
+  encryption:
+    key: !secret freematics_api_key   # 32 random bytes, base64 (Device Builder's new-device wizard makes one)
+  reboot_timeout: 0s                  # never restart for want of a connection

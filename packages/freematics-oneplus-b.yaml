@@ -181,6 +181,12 @@ interval:
           id(motion_ms) = now | 1;
 
 script:
+  # Runs on each GNSS fix (the gnss_* globals hold it); each uplink package adds
+  # its own steps with "- id: !extend on_gnss_fix", so several can share it.
+  - id: on_gnss_fix
+    then:
+      - lambda: ""
+
   # The ICM-42627's wake-on-motion (TDK's ICM-426xx register map): the
   # accelerometer alone in low-power mode at 50 Hz, a flag latched in
   # INT_STATUS2 when any axis changes by more than mg between two samples.

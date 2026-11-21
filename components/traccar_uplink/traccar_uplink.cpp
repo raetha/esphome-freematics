@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "esphome/core/application.h"
+#include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/components/network/util.h"
 
@@ -21,6 +22,21 @@ void TraccarUplink::setup() {
   this->backlog_.init(this->max_queue_, this->store_);
   if (!this->backlog_.empty())
     ESP_LOGI(TAG, "%u records from before the restart to send", (unsigned) this->backlog_.size());
+  this->last_tick_ = now_ms();
+  if (this->webhook_()) {
+#ifdef USE_UPLINK_WEBHOOK
+    // A new start begins at a random batch number, so Home Assistant never
+    // mistakes the first batches after a restart for ones it has seen.
+    this->sequence_ = static_cast<uint16_t>(random_uint32());
+    if (!this->poster_.start(this->webhook_url_, sizeof(this->buf_))) {
+      ESP_LOGE(TAG, "Could not start the webhook client");
+      this->mark_failed();
+    }
+#else
+    this->mark_failed();
+#endif
+    return;
+  }
   this->socket_ = socket::socket_udp(AF_INET, IPPROTO_IP);
   if (!this->socket_) {
     ESP_LOGE(TAG, "Could not create a UDP socket");
@@ -28,11 +44,30 @@ void TraccarUplink::setup() {
     return;
   }
   this->socket_->setblocking(false);
-  this->last_tick_ = now_ms();
 }
 
 void TraccarUplink::dump_config() {
   const TrackerConfig &c = this->tracker_.config();
+  if (this->webhook_()) {
+    // The URL itself stays out of the log: the webhook ID in it is the only key.
+    ESP_LOGCONFIG(TAG,
+                  "Home Assistant uplink (compact batches to a webhook over HTTPS):\n"
+                  "  Send interval: %" PRIu32 " s\n"
+                  "  Queue: %u records, up to %u per batch\n"
+                  "  Moving at %.0f km/h, a record every %" PRIu32 " s or on a %.0f deg turn\n"
+                  "  Stopped after %" PRIu32 " s below that; heartbeat every %" PRIu32 " s\n"
+                  "  Waiting: %u records; acknowledged since boot: %" PRIu32 " (%" PRIu32 " bytes sent)",
+                  this->send_interval_ / 1000, this->max_queue_, this->batch_max_, c.moving_speed_kmh,
+                  c.moving_interval_s, c.turn_angle_deg, c.stop_delay_s, c.heartbeat_s, (unsigned) this->queue_size(),
+                  this->records_sent_, this->bytes_sent_);
+    if (this->last_ack_at_ != 0) {
+      ESP_LOGCONFIG(TAG, "  Last answer from Home Assistant: %" PRIu32 " s ago",
+                    (now_ms() - this->last_ack_at_) / 1000);
+    } else {
+      ESP_LOGCONFIG(TAG, "  Last answer from Home Assistant: none since boot");
+    }
+    return;
+  }
   ESP_LOGCONFIG(TAG,
                 "Traccar uplink (%s over UDP):\n"
                 "  Server: %s:%u\n"
@@ -80,6 +115,7 @@ bool TraccarUplink::now_(uint32_t *unix) {
 Record TraccarUplink::base_record_(uint32_t time, Decision why) {
   Record r{};
   r.time = time;
+  r.kind = static_cast<uint8_t>(why);
   r.motion = -1;
   // Battery voltage and motion ride along on trip starts, stops and heartbeats only.
   if (why == Decision::START || why == Decision::STOP || why == Decision::HEARTBEAT) {
@@ -93,7 +129,7 @@ Record TraccarUplink::base_record_(uint32_t time, Decision why) {
 }
 
 void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh,
-                            float course_deg, uint8_t satellites, float altitude_m) {
+                            float course_deg, uint8_t satellites, float altitude_m, uint8_t hdop) {
   uint32_t unix = ::trackcodec::gnss_to_unix(ddmmyy, hhmmsscc);
   if (unix == 0 && !this->now_(&unix))
     return;  // no time yet: nothing useful to record
@@ -110,6 +146,7 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
   r.speed_kmh = speed_kmh;
   r.course_deg = course_deg;
   r.satellites = satellites;
+  r.hdop = hdop;
   if (this->altitude_ && !std::isnan(altitude_m)) {
     r.has_altitude = true;
     r.altitude_m = static_cast<int16_t>(std::lround(std::clamp(altitude_m, -32768.0f, 32767.0f)));
@@ -191,6 +228,10 @@ void TraccarUplink::receive_() {
 void TraccarUplink::send_() {
   if (this->backlog_.memory().empty())
     return;
+  if (this->webhook_()) {
+    this->send_webhook_();
+    return;
+  }
   if (!this->resolver_.ready()) {
     if (this->resolver_.consume_failure())
       this->resolve_retry_at_ = now_ms() + 30000;
@@ -271,6 +312,72 @@ void TraccarUplink::send_freematics_(const struct sockaddr *addr, socklen_t addr
   ESP_LOGD(TAG, "Sent %u records in %u bytes (Freematics, unacknowledged)", (unsigned) count, (unsigned) len);
 }
 
+static ::trackcodec::CompactKind compact_kind(uint8_t decision) {
+  switch (static_cast<Decision>(decision)) {
+    case Decision::START:
+      return ::trackcodec::COMPACT_START;
+    case Decision::STOP:
+      return ::trackcodec::COMPACT_STOP;
+    case Decision::HEARTBEAT:
+      return ::trackcodec::COMPACT_HEARTBEAT;
+    default:
+      return ::trackcodec::COMPACT_FIX;
+  }
+}
+
+void TraccarUplink::send_webhook_() {
+#ifdef USE_UPLINK_WEBHOOK
+  if (!this->poster_.idle())
+    return;
+  const auto &memory = this->backlog_.memory();
+  ::trackcodec::CompactEncoder enc;
+  enc.begin(this->buf_, sizeof(this->buf_), this->sequence_, memory.at(0).time);
+  size_t count = 0;
+  while (count < memory.size() && count < this->batch_max_ &&
+         enc.add(memory.at(count), compact_kind(memory.at(count).kind)))
+    count++;
+  this->last_send_ = now_ms();
+  this->flush_requested_ = false;
+  if (count == 0 || !this->poster_.post(this->buf_, enc.size()))
+    return;
+  this->in_flight_ = true;
+  this->in_flight_count_ = count;
+  this->sent_at_ = now_ms();
+  this->bytes_sent_ += enc.size();
+  ESP_LOGD(TAG, "Posting %u records in %u bytes", (unsigned) count, (unsigned) enc.size());
+#endif
+}
+
+void TraccarUplink::check_webhook_() {
+#ifdef USE_UPLINK_WEBHOOK
+  int status = this->poster_.take_result();
+  if (status == 0)
+    return;  // still under way
+  size_t n = std::min<size_t>(this->in_flight_count_, this->backlog_.memory().size());
+  this->in_flight_ = false;
+  this->in_flight_count_ = 0;
+  this->sequence_++;
+  if (status >= 200 && status < 300) {
+    this->backlog_.acknowledged(n);
+    this->records_sent_ += n;
+    this->last_ack_at_ = now_ms() | 1;
+    this->failures_ = 0;
+    ESP_LOGD(TAG, "Home Assistant took %u records", (unsigned) n);
+    return;
+  }
+  // Tried again at the next send interval (or sooner, on a stop).
+  this->failures_++;
+  if (status < 0) {
+    ESP_LOGW(TAG, "No answer from Home Assistant (%s); %u records kept", esp_err_to_name(this->poster_.last_error()),
+             (unsigned) n);
+  } else if (status == 404 || status == 405) {
+    ESP_LOGW(TAG, "Home Assistant doesn't know this webhook (HTTP %d): check the URL and the integration", status);
+  } else {
+    ESP_LOGW(TAG, "Home Assistant answered HTTP %d; %u records kept", status, (unsigned) n);
+  }
+#endif
+}
+
 void TraccarUplink::loop() {
   uint32_t now = now_ms();
 
@@ -282,6 +389,19 @@ void TraccarUplink::loop() {
       this->enqueue_(this->base_record_(unix, Decision::HEARTBEAT));
       this->flush_requested_ = true;
     }
+  }
+
+  if (this->webhook_()) {
+    if (this->in_flight_) {
+      this->check_webhook_();
+      return;
+    }
+    if (!network::is_connected())
+      return;
+    if (this->flush_requested_ || this->backlog_.memory().size() >= this->batch_max_ ||
+        now - this->last_send_ >= this->send_interval_)
+      this->send_();
+    return;
   }
 
   if (!network::is_connected())

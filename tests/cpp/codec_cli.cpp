@@ -4,6 +4,9 @@
 //   packet <packet_id> <location_packet_id> <device_id> <n> then n lines:
 //     <time> <has_location> <lat> <lon> <speed> <course> <sats> <battery_mv> <motion>
 //   -> hex of the packet
+//   compact <capacity> <sequence> <base_time> <n> then n lines:
+//     <kind> <time> <has_location> <lat> <lon> <speed> <course> <sats> <hdop> <battery_mv> [<altitude> if has == 2]
+//   -> records added, then the hex of the batch
 //   ack <hex> <location_packet_id>  -> accepted count or -1
 //   unix <ddmmyy> <hhmmsscc>        -> Unix seconds
 //   track <moving_speed> <stop_delay> <moving_interval> <turn_angle> <min_turn> <heartbeat> <n>
@@ -16,6 +19,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "compact.h"
 #include "record_queue.h"
 #include "freematics_text.h"
 #include "teltonika.h"
@@ -51,6 +55,39 @@ int main() {
       uint8_t buf[2048];
       size_t len = encode_packet(buf, sizeof(buf), pid, lpid, id, rs.data(), rs.size());
       for (size_t i = 0; i < len; i++)
+        std::printf("%02x", buf[i]);
+      std::printf("\n");
+    } else if (!std::strcmp(cmd, "compact")) {
+      unsigned cap, seq, base, n;
+      std::scanf("%u %u %u %u", &cap, &seq, &base, &n);
+      uint8_t buf[2048];
+      CompactEncoder enc;
+      enc.begin(buf, cap < sizeof(buf) ? cap : sizeof(buf), static_cast<uint16_t>(seq), base);
+      unsigned added = 0;
+      bool full = false;
+      for (unsigned i = 0; i < n; i++) {
+        Record r{};
+        unsigned kind, t, has, sats, hdop, mv;
+        std::scanf("%u %u %u %f %f %f %f %u %u %u", &kind, &t, &has, &r.latitude, &r.longitude, &r.speed_kmh,
+                   &r.course_deg, &sats, &hdop, &mv);
+        r.time = t;
+        r.has_location = has != 0;
+        r.satellites = sats;
+        r.hdop = hdop;
+        r.battery_mv = mv;
+        if (has == 2) {
+          int alt;
+          std::scanf("%d", &alt);
+          r.has_altitude = true;
+          r.altitude_m = static_cast<int16_t>(alt);
+        }
+        if (!full && enc.add(r, static_cast<CompactKind>(kind)))
+          added++;
+        else
+          full = true;
+      }
+      std::printf("%u\n", added);
+      for (size_t i = 0; i < enc.size(); i++)
         std::printf("%02x", buf[i]);
       std::printf("\n");
     } else if (!std::strcmp(cmd, "freematics")) {

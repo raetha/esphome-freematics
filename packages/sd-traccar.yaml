@@ -16,4 +16,5 @@ file_queue:
   writer_task: ${traccar_store_writer_task}
 
 traccar_uplink:
-  file_queue_id: traccar_store
+  - id: !extend traccar
+    file_queue_id: traccar_store

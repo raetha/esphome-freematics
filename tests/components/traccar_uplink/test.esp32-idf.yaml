@@ -1,4 +1,5 @@
-# ESPHome-style component test: every option and automation of traccar_uplink,
+# ESPHome-style component test: every option and automation of traccar_uplink
+# (Traccar and Home Assistant's webhook side by side),
 # compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
 esphome:
   name: test-traccar-uplink
@@ -30,30 +31,41 @@ sensor:
     lambda: return 12.6;
 
 traccar_uplink:
-  id: traccar
-  host: traccar.example.com
-  port: 5027
-  device_id: test-device
-  send_interval: 30s
-  ack_timeout: 10s
-  max_queue: 100
-  batch_max: 20
-  battery_voltage: battery
-  time_id: sntp_time
-  moving_speed: 8
-  stop_delay: 120s
-  moving_interval: 5s
-  turn_angle: 45
-  min_turn_interval: 2s
-  heartbeat_interval: 30min
-  on_motion_start:
-    - logger.log: "moving"
-  on_motion_stop:
-    - traccar_uplink.flush: traccar
+  - id: traccar
+    host: traccar.example.com
+    port: 5027
+    device_id: test-device
+    send_interval: 30s
+    ack_timeout: 10s
+    max_queue: 100
+    batch_max: 20
+    battery_voltage: battery
+    time_id: sntp_time
+    moving_speed: 8
+    stop_delay: 120s
+    moving_interval: 5s
+    turn_angle: 45
+    min_turn_interval: 2s
+    heartbeat_interval: 30min
+    on_motion_start:
+      - logger.log: "moving"
+    on_motion_stop:
+      - traccar_uplink.flush: traccar
+
+  # A second uplink: Home Assistant's webhook, beside Traccar
+  - id: ha_uplink
+    protocol: home_assistant
+    url: https://hooks.nabu.casa/test-webhook-id
+    send_interval: 2min
+    batch_max: 60
+    battery_voltage: battery
+    time_id: sntp_time
 
 interval:
   - interval: 2s
     then:
       - lambda: |-
           id(traccar).add_fix(191126, 18300500, 40.7128f, -74.006f, 52.0f, 270.0f, 9);
+          id(ha_uplink).set_can_start(true);
+          id(ha_uplink).add_fix(191126, 18300500, 40.7128f, -74.006f, 52.0f, 270.0f, 9, 12.0f, 11);
           ESP_LOGD("test", "moving %d, queued %u", id(traccar).is_moving(), (unsigned) id(traccar).queue_size());

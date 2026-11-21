@@ -1,0 +1,40 @@
+# Report to Home Assistant through the Freematics integration
+# (https://github.com/raetha/ha-freematics): records go to a webhook as compact
+# batches over HTTPS (about 11 bytes a record while driving), sent every
+# ha_send_interval and at once on trip starts, stops and heartbeats. Home
+# Assistant answers each batch; until it does, the records stay queued and go
+# out again. See docs/configurations.md.
+#
+# Needs the board package and the traccar_uplink component from this
+# repository's components/ (external_components: in the device config), and the
+# webhook URL the integration shows when the device is added, as the secret
+# ha_webhook_url. Works beside uplink-traccar.yaml, to report to both.
+
+substitutions:
+  ha_webhook_url: !secret ha_webhook_url  # the webhook URL the integration shows, kept in Device Builder's secrets
+  ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
+  ha_moving_interval: 10s           # a record at least this often while moving
+  ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none
+  ha_altitude: "true"               # send altitude (a byte or two per record)
+  ha_start_motion: "300"            # s: a trip starts only this soon after the motion sensor felt the car move; "0": GPS alone
+
+traccar_uplink:
+  - id: ha_uplink
+    protocol: home_assistant
+    url: ${ha_webhook_url}
+    send_interval: ${ha_send_interval}
+    moving_interval: ${ha_moving_interval}
+    heartbeat_interval: ${ha_heartbeat_interval}
+    altitude: ${ha_altitude}
+    battery_voltage: battery_voltage    # sent with trip starts, stops and heartbeats
+    time_id: sntp_time
+
+script:
+  - id: !extend on_gnss_fix
+    then:
+      - lambda: |-
+          const uint32_t window_ms = ${ha_start_motion} * 1000UL;
+          id(ha_uplink).set_can_start(window_ms == 0 || !id(motion_sensor) ||
+                                      (id(motion_ms) != 0 && millis() - id(motion_ms) < window_ms));
+          id(ha_uplink).add_fix(id(gnss_date), id(gnss_time), id(gnss_lat), id(gnss_lon),
+                                id(gnss_kmh), id(gnss_course), id(gnss_sats), id(gnss_alt), id(gnss_hdop));

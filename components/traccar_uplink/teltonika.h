@@ -31,6 +31,8 @@ struct Record {
   bool has_altitude;  // with a location: send altitude_m (2 bytes)
   uint8_t satellites;
   int8_t motion;  // -1: not sent; 0 or 1 (GH3000 IO 240)
+  uint8_t hdop;   // HDOP x 10, as the co-processor reports it (compact batches only)
+  uint8_t kind;   // why it was recorded: the tracker's Decision (compact batches only)
 };
 
 // Bytes a record takes in a packet.

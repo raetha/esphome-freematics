@@ -15,7 +15,7 @@ api:
     delay: 60s
 
 script:
-  - id: on_gnss_fix
+  - id: !extend on_gnss_fix
     then:
       - lambda: |-
           id(gnss_latitude).publish_state(id(gnss_lat));

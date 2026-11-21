@@ -20,9 +20,11 @@
 #endif
 
 #include "backlog.h"
+#include "compact.h"
 #include "freematics_text.h"
 #include "teltonika.h"
 #include "tracker.h"
+#include "webhook.h"
 
 namespace esphome::traccar_uplink {
 
@@ -49,6 +51,9 @@ class TraccarUplink final : public Component {
   /// Traccar's Freematics text protocol instead of GH3000: unacknowledged, so
   /// records count as delivered once sent; a login event checks the server answers.
   void set_freematics_protocol(bool on) { this->freematics_ = on; }
+  /// Post compact batches to this Home Assistant webhook URL (HTTPS) instead
+  /// of sending to Traccar; a 2xx answer acknowledges a batch.
+  void set_webhook_url(const std::string &url) { this->webhook_url_ = url; }
   void set_altitude(bool on) { this->altitude_ = on; }
   void set_send_interval(uint32_t ms) { this->send_interval_ = ms; }
   void set_ack_timeout(uint32_t ms) { this->ack_timeout_ = ms; }
@@ -70,7 +75,7 @@ class TraccarUplink final : public Component {
   /// A valid GNSS fix: date ddmmyy and time hhmmsscc (UTC) as the co-processor reports them.
   /// altitude_m: NAN when unknown; sent only with set_altitude(true).
   void add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh, float course_deg,
-               uint8_t satellites, float altitude_m = NAN);
+               uint8_t satellites, float altitude_m = NAN, uint8_t hdop = 0);
   /// Send what's queued at the next chance instead of waiting for send_interval.
   void flush() { this->flush_requested_ = true; }
 
@@ -87,6 +92,9 @@ class TraccarUplink final : public Component {
  protected:
   void enqueue_(const Record &record);
   void send_freematics_(const struct sockaddr *addr, socklen_t addr_len);
+  void send_webhook_();
+  void check_webhook_();
+  bool webhook_() const { return !this->webhook_url_.empty(); }
   bool now_(uint32_t *unix);
   void receive_();
   void send_();
@@ -95,6 +103,11 @@ class TraccarUplink final : public Component {
   std::string host_;
   uint16_t port_{5027};
   std::string device_id_;
+  std::string webhook_url_;
+#ifdef USE_UPLINK_WEBHOOK
+  WebhookPoster poster_;
+#endif
+  uint16_t sequence_{0};
   uint32_t send_interval_{60000};
   uint32_t ack_timeout_{15000};
   uint16_t max_queue_{300};

@@ -2,26 +2,26 @@
 
 The board package (`packages/freematics-oneplus-b.yaml`) is the same for every dongle; what differs is where the data goes. Each choice is an uplink package plus an example device config. Cellular data is the deciding cost, so each has an estimate (approximate; check against the carrier's usage page).
 
-| | Traccar ([example](https://github.com/raetha/esphome-freematics/blob/main/examples/car-traccar.yaml)) | Home Assistant, native API ([example](https://github.com/raetha/esphome-freematics/blob/main/examples/car-home-assistant.yaml)) |
-| --- | --- | --- |
-| Package | `uplink-traccar.yaml` + the `traccar_uplink` component | `uplink-home-assistant.yaml` |
-| Transport | UDP to Traccar's Teltonika port, no tunnel | Native API dialled from the device, through WireGuard |
-| Wire format | Teltonika GH3000 (codec 7): 19 bytes per fix with altitude (17 without), batched, acknowledged | Protobuf state updates, batched every 2 s; HA pings every 20 s when idle |
-| Driving, one hour (defaults) | about 12 KB | about 200 KB |
-| Parked away from Wi-Fi | about 0.4 KB an hour (a heartbeat every 15 min); with `packages/standby.yaml` asleep after 13 minutes, a few hundred bytes per 6-hourly report (estimated, not yet measured) | about 55 KB an hour while connected over LTE (no parked mode yet) |
-| A workday: one hour of driving, 8 hours parked at work, the rest at home on Wi-Fi | about 15 KB | about 650 KB |
-| Offline (no signal) | Fixes queue in memory (300 by default, about 50 minutes of driving) and go out when Traccar answers; lost on reboot unless `sd-traccar.yaml` keeps them on the SD card (50,000) | Nothing kept: HA shows unavailable |
-| Track timestamps | Each fix carries its GNSS time | HA's arrival time |
-| In Home Assistant | Through Traccar (Traccar Server integration): device tracker and attributes | Native entities; a template device tracker over latitude/longitude ([home-assistant.md](home-assistant.md)) |
-| Needs at home | Traccar reachable on UDP 5027 | Home Assistant 2026.10+, a WireGuard server |
-| Diagnostics | Logs in Device Builder over Wi-Fi, or on the SD card (`sd-logs.yaml`); battery voltage with each start, stop and heartbeat | Cellular signal, heap, uptime, reset reason, battery voltage, probe buttons |
+| | Traccar ([example](https://github.com/raetha/esphome-freematics/blob/main/examples/car-traccar.yaml)) | Home Assistant, native API ([example](https://github.com/raetha/esphome-freematics/blob/main/examples/car-home-assistant.yaml)) | Home Assistant integration ([example](https://github.com/raetha/esphome-freematics/blob/main/examples/car-ha-integration.yaml)) |
+| --- | --- | --- | --- |
+| Package | `uplink-traccar.yaml` + the `traccar_uplink` component | `uplink-home-assistant.yaml` | `uplink-ha-webhook.yaml` + the `traccar_uplink` component, and the [Freematics integration](https://github.com/raetha/ha-freematics) |
+| Transport | UDP to Traccar's Teltonika port, no tunnel | Native API dialled from the device, through WireGuard | HTTPS POST to a Home Assistant webhook (Nabu Casa's cloud or HA's own address), no tunnel |
+| Wire format | Teltonika GH3000 (codec 7): 19 bytes per fix with altitude (17 without), batched, acknowledged | Protobuf state updates, batched every 2 s; HA pings every 20 s when idle | Compact batches: about 11 bytes a record while driving, sent every 2 minutes, acknowledged |
+| Driving, one hour (defaults) | about 12 KB | about 200 KB | estimated 25 to 50 KB, mostly HTTPS overhead per batch (to be measured) |
+| Parked away from Wi-Fi | about 0.4 KB an hour (a heartbeat every 15 min); with `packages/standby.yaml` asleep after 13 minutes, a few hundred bytes per 6-hourly report (estimated, not yet measured) | about 55 KB an hour while connected over LTE (no parked mode yet) | a batch per heartbeat (15 min), about 1 to 2 KB each (estimated); with `standby.yaml` as for Traccar |
+| A workday: one hour of driving, 8 hours parked at work, the rest at home on Wi-Fi | about 15 KB | about 650 KB | estimated 60 to 110 KB |
+| Offline (no signal) | Fixes queue in memory (300 by default, about 50 minutes of driving) and go out when Traccar answers; lost on reboot unless `sd-traccar.yaml` keeps them on the SD card (50,000) | Nothing kept: HA shows unavailable | Records queue in memory (300) and go out when Home Assistant answers |
+| Track timestamps | Each fix carries its GNSS time | HA's arrival time | Each record carries its GNSS time; Home Assistant shows the newest as the current state (it keeps no back-dated history) |
+| In Home Assistant | Through Traccar (Traccar Server integration): device tracker and attributes | Native entities; a template device tracker over latitude/longitude ([home-assistant.md](home-assistant.md)) | The integration's device tracker, sensors, a moving sensor and trip events |
+| Needs at home | Traccar reachable on UDP 5027 | Home Assistant 2026.10+, a WireGuard server | Home Assistant reachable over HTTPS (Nabu Casa, or its own external address) |
+| Diagnostics | Logs in Device Builder over Wi-Fi, or on the SD card (`sd-logs.yaml`); battery voltage with each start, stop and heartbeat | Cellular signal, heap, uptime, reset reason, battery voltage, probe buttons | As Traccar's |
 
 The stock telelogger used a few hundred KB on a busy day and 10 to 15 KB on a typical one, logging GPS only, so the Traccar configuration is in the same range with every fix delivered and acknowledged.
 
 The Traccar figures come from a simulation through the real tracking filter and encoder (`tests/test_simulation.py`; IP and UDP headers and Traccar's answers included): an hour of town and highway driving makes about 385 records in 64 packets, 12.3 KB with altitude (11.5 KB without, `traccar_altitude: "false"`); 8 hours parked on LTE makes 32 heartbeats, 3.3 KB. Most of a packet's cost is fixed (about 80 bytes of headers and answer), so fewer, fuller packets save the most:
 
 | Setting (substitution) | Driving, one hour | Parked on LTE, 8 hours |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | Defaults: send every 60 s, heartbeat every 15 min | 12.3 KB | 3.3 KB |
 | `traccar_send_interval: 120s` | 9.9 KB | |
 | `traccar_send_interval: 300s` | 8.4 KB | |
@@ -59,6 +59,14 @@ All of these are substitutions in `packages/uplink-traccar.yaml`; a device confi
 - **A name that isn't proxied**: Cloudflare's proxy (the orange cloud) and Cloudflare Tunnel carry web traffic only, not UDP, so a proxied name gives the dongle Cloudflare's address and its packets go nowhere. Use a DNS-only record (grey cloud) for the dongle, pointing at the home address, even if the web interface stays proxied under another name.
 - **Checking**: `tracker-server.log` shows the Teltonika packets and "Unknown device" if the identifier doesn't match (Traccar doesn't answer unknown devices). From any computer outside the home network (a phone's hotspot), `python3 scripts/traccar_check.py <host> <device id>` sends one time-only record the way the dongle does and says whether Traccar answered.
 - **Verified**: the encoder's packets (a time-only record, a fix, a full batch of 40) were checked against Traccar 6.17.0 itself, which decoded them and answered with the acknowledgement the uplink expects (`tests/test_traccar_server.py`).
+
+## Home Assistant integration
+
+The Traccar configuration's tracking, sent to Home Assistant instead (or as well: `uplink-ha-webhook.yaml` works beside `uplink-traccar.yaml`). Add the device in Home Assistant's [Freematics integration](https://github.com/raetha/ha-freematics): it creates a webhook and shows its URL (Nabu Casa's cloud address when Home Assistant Cloud is on, otherwise Home Assistant's own external address), which goes into Device Builder's secrets as `ha_webhook_url`. Nothing at home is opened to the internet beyond what Home Assistant already serves.
+
+Each batch is one HTTPS request: the records in a compact binary form (`components/traccar_uplink/compact.h`: the first record in full, then only what changed, about 11 bytes a record while driving against GH3000's 19), posted every `ha_send_interval` (2 minutes) and at once on a trip start, stop or heartbeat. Home Assistant's answer acknowledges the batch; until then the records stay queued. Most of the cost is the request itself (TCP, TLS and HTTP headers, roughly 1 to 2 KB): the client keeps the connection open between batches while the server allows, and resumes the TLS session with a ticket when it doesn't. The posting runs in a task of its own, so the main loop never waits for the network. The webhook URL is the only key, so it never appears in the logs.
+
+Home Assistant can't store states with past timestamps: records sent late (after a coverage gap) update the device to the newest one, and their trip starts and stops still arrive as events with their real times, but there's no track history as in Traccar. For history and trips, run both.
 
 ## Home Assistant
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -37,7 +38,7 @@ def test_examples_fetch_from_github_and_localize(example):
         return
     assert "url: https://github.com/raetha/esphome-freematics" in text
     out = localize.localize(text, Path("/repo"))
-    assert "url:" not in out and "github://" not in out
+    assert not re.search(r"^\s+url:", out, re.MULTILINE) and "github://" not in out
     for line in out.splitlines():
         if "!include" in line:
             path = line.split("!include ")[1]

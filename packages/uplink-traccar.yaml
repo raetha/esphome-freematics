@@ -24,28 +24,28 @@ substitutions:
   traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
 
 traccar_uplink:
-  id: traccar
-  host: ${traccar_host}
-  protocol: ${traccar_protocol}
-  port: ${traccar_port}
-  device_id: ${traccar_device_id}
-  send_interval: ${traccar_send_interval}
-  moving_speed: ${traccar_moving_speed}
-  moving_interval: ${traccar_moving_interval}
-  turn_angle: ${traccar_turn_angle}
-  altitude: ${traccar_altitude}
-  start_fixes: ${traccar_start_fixes}
-  start_distance: ${traccar_start_distance}
-  stop_delay: ${traccar_stop_delay}
-  heartbeat_interval: ${traccar_heartbeat_interval}
-  battery_voltage: battery_voltage    # sent with trip starts, stops and heartbeats
-  time_id: sntp_time
-  # Hooks for later: OBD values read once per stop, not while driving.
-  on_motion_stop:
-    - logger.log: "Parked"
+  - id: traccar
+    host: ${traccar_host}
+    protocol: ${traccar_protocol}
+    port: ${traccar_port}
+    device_id: ${traccar_device_id}
+    send_interval: ${traccar_send_interval}
+    moving_speed: ${traccar_moving_speed}
+    moving_interval: ${traccar_moving_interval}
+    turn_angle: ${traccar_turn_angle}
+    altitude: ${traccar_altitude}
+    start_fixes: ${traccar_start_fixes}
+    start_distance: ${traccar_start_distance}
+    stop_delay: ${traccar_stop_delay}
+    heartbeat_interval: ${traccar_heartbeat_interval}
+    battery_voltage: battery_voltage    # sent with trip starts, stops and heartbeats
+    time_id: sntp_time
+    # Hooks for later: OBD values read once per stop, not while driving.
+    on_motion_stop:
+      - logger.log: "Parked"
 
 script:
-  - id: on_gnss_fix
+  - id: !extend on_gnss_fix
     then:
       - lambda: |-
           // GPS drift while the car sits still (a garage, a house, a desk)
@@ -55,4 +55,4 @@ script:
           id(traccar).set_can_start(window_ms == 0 || !id(motion_sensor) ||
                                     (id(motion_ms) != 0 && millis() - id(motion_ms) < window_ms));
           id(traccar).add_fix(id(gnss_date), id(gnss_time), id(gnss_lat), id(gnss_lon),
-                              id(gnss_kmh), id(gnss_course), id(gnss_sats), id(gnss_alt));
+                              id(gnss_kmh), id(gnss_course), id(gnss_sats), id(gnss_alt), id(gnss_hdop));

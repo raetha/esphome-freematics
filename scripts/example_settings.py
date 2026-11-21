@@ -26,6 +26,7 @@ TITLES = {
     "wifi-first.yaml": "Wi-Fi first",
     "uplink-traccar.yaml": "Traccar",
     "uplink-home-assistant.yaml": "Home Assistant",
+    "uplink-ha-webhook.yaml": "Home Assistant integration (uplink-ha-webhook.yaml)",
     "sd-traccar.yaml": "SD card: records (sd-traccar.yaml)",
     "sd-logs.yaml": "SD card: log (sd-logs.yaml)",
     "standby.yaml": "Sleep while parked (standby.yaml)",

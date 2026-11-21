@@ -1,14 +1,17 @@
-"""Send GNSS fixes to Traccar as compact Teltonika GH3000 records over UDP."""
+"""Send GNSS fixes to Traccar as compact Teltonika GH3000 records over UDP, or
+to a Home Assistant webhook as compact batches over HTTPS."""
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
-from esphome.components import sensor, socket, time
-from esphome.const import CONF_ID, CONF_PORT, CONF_TIME_ID
+from esphome.components import esp32, sensor, socket, time
+from esphome.const import CONF_ID, CONF_PORT, CONF_TIME_ID, CONF_URL
+from esphome.core import CORE
 
 DOMAIN = "traccar_uplink"
 CODEOWNERS = ["@raetha"]
 DEPENDENCIES = ["network"]
+MULTI_CONF = True  # Traccar and Home Assistant together
 AUTO_LOAD = ["socket"]
 
 CONF_HOST = "host"
@@ -31,10 +34,11 @@ CONF_ON_MOTION_START = "on_motion_start"
 CONF_ON_MOTION_STOP = "on_motion_stop"
 CONF_FILE_QUEUE_ID = "file_queue_id"
 CONF_PROTOCOL = "protocol"
-PROTOCOLS = {"teltonika": 5027, "freematics": 5170}  # and their default ports
+PROTOCOLS = {"teltonika": 5027, "freematics": 5170, "home_assistant": None}
+WEBHOOK = "home_assistant"
 
 # Bump when trackcodec::Record's layout changes, so stored files start afresh.
-RECORD_FORMAT = 2
+RECORD_FORMAT = 3
 
 traccar_uplink_ns = cg.esphome_ns.namespace("traccar_uplink")
 TraccarUplink = traccar_uplink_ns.class_("TraccarUplink", cg.Component)
@@ -54,16 +58,44 @@ def _seconds(value):
     return cv.positive_time_period_seconds(value)
 
 
+def _protocol_fields(config):
+    if config[CONF_PROTOCOL] == WEBHOOK:
+        if CONF_URL not in config:
+            raise cv.Invalid("the home_assistant protocol needs url (the webhook)")
+        if not CORE.is_esp32:
+            raise cv.Invalid("the home_assistant protocol needs an ESP32")
+        for key in (CONF_HOST, CONF_PORT, CONF_DEVICE_ID):
+            if key in config:
+                raise cv.Invalid(
+                    f"{key} is for Traccar, not the home_assistant protocol"
+                )
+    else:
+        for key in (CONF_HOST, CONF_DEVICE_ID):
+            if key not in config:
+                raise cv.Invalid(f"{key} is required for Traccar")
+        if CONF_URL in config:
+            raise cv.Invalid("url is for the home_assistant protocol")
+    return config
+
+
+def _url(value):
+    value = cv.string_strict(value)
+    if not value.startswith("https://"):
+        raise cv.Invalid("the webhook URL must start with https://")
+    return value
+
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(TraccarUplink),
-            cv.Required(CONF_HOST): cv.string_strict,
+            cv.Optional(CONF_HOST): cv.string_strict,
+            cv.Optional(CONF_URL): _url,
             cv.Optional(CONF_PROTOCOL, default="teltonika"): cv.one_of(
                 *PROTOCOLS, lower=True
             ),
             cv.Optional(CONF_PORT): cv.port,
-            cv.Required(CONF_DEVICE_ID): _device_id,
+            cv.Optional(CONF_DEVICE_ID): _device_id,
             cv.Optional(CONF_SEND_INTERVAL, default="60s"): cv.All(
                 cv.positive_time_period_milliseconds,
                 cv.Range(min=cv.TimePeriod(seconds=5)),
@@ -73,7 +105,7 @@ CONFIG_SCHEMA = cv.All(
                 cv.Range(min=cv.TimePeriod(seconds=2)),
             ),
             cv.Optional(CONF_MAX_QUEUE, default=300): cv.int_range(min=10, max=2000),
-            cv.Optional(CONF_BATCH_MAX, default=40): cv.int_range(min=1, max=40),
+            cv.Optional(CONF_BATCH_MAX, default=40): cv.int_range(min=1, max=80),
             cv.Optional(CONF_BATTERY_VOLTAGE): cv.use_id(sensor.Sensor),
             cv.Optional(CONF_TIME_ID): cv.use_id(time.RealTimeClock),
             cv.Optional(CONF_FILE_QUEUE_ID): cv.use_id(FileQueue),
@@ -93,7 +125,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ON_MOTION_STOP): automation.validate_automation({}),
         }
     ).extend(cv.COMPONENT_SCHEMA),
+    _protocol_fields,
     socket.consume_sockets(1, "traccar_uplink", socket.SocketType.UDP),
+    socket.consume_sockets(1, "traccar_uplink", socket.SocketType.TCP),
 )
 
 
@@ -101,11 +135,21 @@ async def to_code(config):
     socket.require_ipv4_resolve()  # compiles the async DNS lookup we use
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
-    cg.add(var.set_host(config[CONF_HOST]))
-    cg.add(var.set_port(config.get(CONF_PORT, PROTOCOLS[config[CONF_PROTOCOL]])))
+    if config[CONF_PROTOCOL] == WEBHOOK:
+        cg.add(var.set_webhook_url(config[CONF_URL]))
+        cg.add_define("USE_UPLINK_WEBHOOK")
+        esp32.request_http_client()
+        esp32.require_certificate_bundle()
+        # A TLS session ticket lets the next batch skip most of the handshake
+        # when the server has closed the connection in between.
+        esp32.require_mbedtls_tls_extras(["CONFIG_MBEDTLS_CLIENT_SSL_SESSION_TICKETS"])
+        esp32.add_idf_sdkconfig_option("CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS", True)
+    else:
+        cg.add(var.set_host(config[CONF_HOST]))
+        cg.add(var.set_port(config.get(CONF_PORT, PROTOCOLS[config[CONF_PROTOCOL]])))
+        cg.add(var.set_device_id(config[CONF_DEVICE_ID]))
     cg.add(var.set_freematics_protocol(config[CONF_PROTOCOL] == "freematics"))
     cg.add(var.set_altitude(config[CONF_ALTITUDE]))
-    cg.add(var.set_device_id(config[CONF_DEVICE_ID]))
     cg.add(var.set_send_interval(config[CONF_SEND_INTERVAL]))
     cg.add(var.set_ack_timeout(config[CONF_ACK_TIMEOUT]))
     cg.add(var.set_max_queue(config[CONF_MAX_QUEUE]))

@@ -554,3 +554,80 @@ def test_trip_starts_only_while_the_car_is_on(cli):
         "NONE",
         "RECORD",
     ]
+
+
+# Compact batches for the Home Assistant integration (compact.h, tests/compact.py).
+
+
+def compact(cli, records, capacity=1024, sequence=7, base=1_700_000_000):
+    lines = [f"compact {capacity} {sequence} {base} {len(records)}"]
+    lines += [" ".join(str(x) for x in r) for r in records]
+    out = cli("\n".join(lines) + "\n")
+    return int(out[0]), bytes.fromhex(out[1])
+
+
+def test_compact_round_trip(cli):
+    from compact import decode as decode_compact
+
+    t = 1_700_000_000
+    records = [
+        # kind time has lat lon speed course sats hdop battery_mv [alt]
+        (1, t, 2, 43.818481, -72.278662, 12, 91, 9, 12, 14100, 237),
+        (0, t + 10, 2, 43.819001, -72.277001, 48.6, 359.9, 10, 9, 0, 241),
+        (0, t + 20, 1, 43.821777, -72.270000, 95, 180, 11, 8, 0),
+        (2, t + 400, 2, 43.821700, -72.270100, 0, 0, 11, 8, 12600, 230),
+        (3, t + 1300, 0, 0, 0, 0, 0, 0, 0, 12500),  # heartbeat without a fix
+    ]
+    added, batch = compact(cli, records, sequence=513, base=t)
+    assert added == len(records)
+    sequence, got = decode_compact(batch)
+    assert sequence == 513
+    assert [r.kind for r in got] == ["start", "fix", "fix", "stop", "heartbeat"]
+    assert [r.time for r in got] == [t, t + 10, t + 20, t + 400, t + 1300]
+    tol = 8e-6  # positions are float32 on the device: under a metre
+    assert got[0].latitude == pytest.approx(43.818481, abs=tol)
+    assert got[0].longitude == pytest.approx(-72.278662, abs=tol)
+    assert got[2].latitude == pytest.approx(43.821777, abs=tol)
+    assert [r.speed_kmh for r in got[:4]] == [12, 49, 95, 0]
+    assert [r.course for r in got[:4]] == [90, 358, 180, 0]
+    assert got[0].satellites == 9 and got[0].hdop == pytest.approx(1.2)
+    assert [r.altitude for r in got] == [237, 241, None, 230, None]
+    assert [r.battery_v for r in got] == [14.1, None, None, 12.6, 12.5]
+    assert got[4].latitude is None
+
+
+def test_compact_records_while_driving_are_small(cli):
+    t = 1_700_000_000
+    lat, lon = 43.8, -72.27
+    records = [
+        (
+            0,
+            t + 10 * i,
+            2,
+            lat + 0.0008 * i,
+            lon + 0.0011 * i,
+            90,
+            45,
+            10,
+            9,
+            0,
+            240 + i,
+        )
+        for i in range(31)
+    ]
+    added, batch = compact(cli, records, base=t)
+    assert added == 31
+    # After the first, a record 10 s and about 130 m on: 11 bytes (GH3000: 19)
+    per_record = (len(batch) - 7 - 19) / 30
+    assert per_record <= 11
+
+
+def test_compact_stops_when_full(cli):
+    t = 1_700_000_000
+    records = [(0, t + i, 1, 43.8, -72.27, 50, 0, 9, 9, 0) for i in range(20)]
+    added, batch = compact(cli, records, capacity=60, base=t)
+    assert 0 < added < 20
+    assert len(batch) <= 60
+    from compact import decode as decode_compact
+
+    assert len(decode_compact(batch)[1]) == added
