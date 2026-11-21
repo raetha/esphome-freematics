@@ -47,7 +47,7 @@ substitutions:
   # traccar_altitude: "true"            # send altitude: 2 bytes per position, about 7% more data while driving
   # traccar_start_fixes: "3"            # a trip starts after this many fast fixes in a row (2 s apart)...
   # traccar_start_distance: 50m         # ...this far from where the car was parked (GPS drift doesn't start trips)
-  # traccar_start_voltage: "13.2"      # V: a trip starts only while the car is on (its 12 V system charging); "0": on any voltage (bench tests)
+  # traccar_start_voltage: "13.2"      # V: a trip starts only while the car is on (its 12 V system charging); "0" when powered over USB instead of the OBD port (no 12 V to read), or for bench tests
   # traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
   # traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
 
