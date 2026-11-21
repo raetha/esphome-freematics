@@ -1,7 +1,9 @@
 """Decoder for the compact batches (components/traccar_uplink/compact.h).
 
-The Home Assistant integration (raetha/ha-freematics) carries the same decoder;
-the tests here check the C++ encoder against it.
+A copy of the Home Assistant integration's decoder
+(custom_components/freematics/compact.py in raetha/ha-freematics), so the
+tests here check the C++ encoder against what Home Assistant reads: keep the
+two the same.
 """
 
 from __future__ import annotations
