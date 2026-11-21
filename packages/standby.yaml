@@ -37,6 +37,11 @@ substitutions:
 deep_sleep:
   id: sleeper
 
+# Each check wake is a start that never lasts the minute safe mode waits for;
+# the check clears its count, or ten checks would start safe mode.
+safe_mode:
+  id: safe_mode_ctl
+
 i2c:
   id: imu_bus
   sda: GPIO21
@@ -84,6 +89,7 @@ esphome:
                 // and a sleep in the middle of a card write could damage it.
                 // The short wait lets a write already under way finish.
                 vTaskDelay(pdMS_TO_TICKS(200));
+                id(safe_mode_ctl).clean_rtc();
                 esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(check_s) * 1000000ULL);
                 esp_deep_sleep_start();
               }

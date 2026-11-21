@@ -34,6 +34,7 @@ substitutions:
   # lte_back_after: 30s     # Wi-Fi gone this long: turn LTE back on
   # wifi_pause_speed: "10"  # km/h: at or above, with no Wi-Fi connected, stop searching for Wi-Fi; "1000": never pause
   # wifi_resume_after: "30" # seconds below that speed (or without a GNSS fix) before searching again
+  # wifi_power_save: light  # Wi-Fi power saving: light, or none if an access point keeps dropping the device
   # lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
 
   # Traccar

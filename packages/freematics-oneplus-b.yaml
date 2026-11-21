@@ -88,26 +88,36 @@ modem:
   update_interval: 120s
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
+    # The module's first answer after the ESP32 starts, and any answer after
+    # three syncs without a connection (a dropped connection counts as three),
+    # restart it: after a drop the SIM7070 refuses to start PPP again ("Failed
+    # to enter PPP") until it's restarted, and it keeps power across ESP32
+    # restarts (the board can't cut it). It answers again about 10 s later.
+    - lambda: |-
+        bool first = !id(modem_restarted);
+        id(modem_restarted) = true;
+        id(modem_syncs)++;
+        bool stuck = id(modem_syncs) > 3;
+        if (stuck)
+          ESP_LOGW("cellular", "No connection after %u tries: restarting the module", (unsigned) (id(modem_syncs) - 1));
+        id(modem_first_sync) = first;
+        id(modem_restart_now) = (first && ${modem_restart_on_boot}) || stuck;
+        if (id(modem_restart_now))
+          id(modem_syncs) = 0;
     - if:
         condition:
-          lambda: return !id(modem_restarted);
+          lambda: return id(modem_first_sync);
         then:
-          # First answer since the ESP32 started. Fix the module's serial speed
-          # (the SIM7070 stores it itself; AT&W answers ERROR), so bytes it hears while it starts can never
-          # set a wrong one; then restart it, as it may still be in a session
-          # from before an update or a crash (the board can't cut its power).
-          # It answers again in about 10 s, and that sync takes the else branch.
-          - globals.set: { id: modem_restarted, value: "true" }
+          # Fix the module's serial speed (it stores it itself), so bytes it
+          # hears while it starts can never set a wrong one.
           - modem.send_at: "AT+IPR=115200"
           - delay: 1s
-          - if:
-              condition:
-                lambda: return ${modem_restart_on_boot};
-              then:
-                - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
-                - modem.send_at: "AT+CFUN=1,1"
-              else:
-                - modem.send_at: "AT+CFUN=1"
+    - if:
+        condition:
+          lambda: return id(modem_restart_now);
+        then:
+          - logger.log: "Cellular: restarting the module (AT+CFUN=1,1)"
+          - modem.send_at: "AT+CFUN=1,1"
         else:
           # The modem component powers the SIM down (AT+CFUN=0) to write the
           # APN, then sends AT+CFUN=4, which on the SIM7070 leaves the SIM off
@@ -117,13 +127,11 @@ modem:
           - modem.send_at: "AT+CFUN=1"
   on_connect:
     - logger.log: "Cellular: PPP up"
-    - if:
-        condition:
-          lambda: return ${beep_on_network};
-        then:
-          - script.execute: { id: beep, ms: 50 }
+    - globals.set: { id: modem_syncs, value: "0" }
+    - script.execute: network_beep
   on_disconnect:
     - logger.log: "Cellular: PPP down"
+    - globals.set: { id: modem_syncs, value: "3" }   # restart the module at its next answer
 
 output:
   - platform: gpio
@@ -137,6 +145,18 @@ output:
 
 script:
   # A beep of ms milliseconds; beeps asked for together play one after another.
+  # A short beep when Wi-Fi or cellular comes up, at most once in 10 minutes
+  # (a network that keeps dropping the device would beep every minute).
+  - id: network_beep
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return ${beep_on_network} &&
+                     (id(last_network_beep) == 0 || millis() - id(last_network_beep) >= 600000);
+          then:
+            - lambda: id(last_network_beep) = millis() | 1;
+            - script.execute: { id: beep, ms: 50 }
   - id: beep
     mode: queued
     parameters:
@@ -196,6 +216,18 @@ script:
                         - modem.enable:
                   - delay: ${modem_pwrkey_wait}
 globals:
+  - id: modem_syncs              # module answers since the last connection
+    type: uint8_t
+    initial_value: "0"
+  - id: modem_first_sync
+    type: bool
+    initial_value: "false"
+  - id: modem_restart_now
+    type: bool
+    initial_value: "false"
+  - id: last_network_beep        # millis() of the last network beep; 0: none yet
+    type: uint32_t
+    initial_value: "0"
   - id: lte_blocked              # set by packages/wifi-first.yaml while Wi-Fi is up
     type: bool
     initial_value: "false"
