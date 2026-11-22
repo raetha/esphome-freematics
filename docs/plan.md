@@ -62,6 +62,8 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 ## Log
 
+- 2026-11-21: First boot of the second dongle (freematics-eli) with the Home Assistant integration configuration: builds and boots; the motion sensor reported "Moved" right after power-on (its first wake-on-motion comparisons have no earlier sample), which would open the trip gate for 5 minutes on every plug-in: the arming now waits 200 ms and clears that flag before its flags count. Its cellular module didn't answer two PWRKEY presses before home Wi-Fi came up and stopped the attempt ("Modem not responding"): to check on the bench with `lte_on_wifi: "true"`.
+
 - 2026-11-21: Clean-up before the side-by-side trips: the uplink component is now `tracker_uplink` (it serves Home Assistant as well as Traccar); standby waits for every uplink before sleeping (a registry of the component's instances replaces `standby_uplink`); the webhook URL is a device setting (`ha_webhook_url`, one secret per dongle), and the optional CI build fills it in (`REQUIRED` in `scripts/localize.py`).
 
 - 2026-11-21: Wi-Fi search back-off (owner's idea): parked, the search stops after `wifi_search_time` (2 minutes) without a known network until the car moves again; each start and wake searches again, and a network that dropped where the car is parked is searched for again after 1, 2, 4, 8 and then every 15 minutes (the owner's addition: an access point restarting). ESPHome itself has no back-off (scan, a hidden-network try for each missing network, a radio reset, about every 8 s).

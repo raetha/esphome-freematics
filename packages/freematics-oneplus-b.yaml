@@ -170,7 +170,7 @@ interval:
   - interval: 1s
     then:
       - lambda: |-
-          if (!id(motion_sensor))
+          if (!id(motion_sensor) || !id(motion_settled))
             return;
           uint8_t reg = 0x37, status = 0;  // INT_STATUS2: wake-on-motion flags
           if (id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1) != i2c::ERROR_OK || (status & 0x07) == 0)
@@ -199,6 +199,7 @@ script:
     then:
       - lambda: |-
           id(motion_arm_ok) = false;
+          id(motion_settled) = false;
           if (!id(motion_sensor))
             return;
           auto put = [](uint8_t r, uint8_t v) {
@@ -232,13 +233,21 @@ script:
             return;
           uint8_t b[2] = {0x57, 0x05};         // SMD_CONFIG: wake-on-motion, compared with the previous sample
           bool ok = id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
-          uint8_t reg = 0x37, status;
-          id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1);  // clear a flag set while setting up
           if (ok)
             ESP_LOGD("motion", "Motion sensor set to %d mg", mg);
           else
             ESP_LOGW("motion", "Couldn't set the motion sensor up");
           id(motion_arm_ok) = ok;
+      # Starting from off (a power-on), the first comparisons are against no
+      # earlier sample and set a flag: let a few samples pass, then clear it,
+      # so a dongle just plugged in doesn't count as moved.
+      - delay: 200ms
+      - lambda: |-
+          if (!id(motion_arm_ok))
+            return;
+          uint8_t reg = 0x37, status;
+          id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1);
+          id(motion_settled) = true;
   # A beep of ms milliseconds; beeps asked for together play one after another.
   # A short beep when Wi-Fi or cellular comes up, at most once in 10 minutes
   # (a network that keeps dropping the device would beep every minute).
@@ -312,6 +321,9 @@ script:
                   - delay: ${modem_pwrkey_wait}
 globals:
   - id: motion_sensor            # a supported motion sensor answered
+    type: bool
+    initial_value: "false"
+  - id: motion_settled           # armed and past its first samples: its flags mean movement
     type: bool
     initial_value: "false"
   - id: motion_arm_ok            # the motion sensor took its settings
