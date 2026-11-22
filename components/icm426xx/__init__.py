@@ -1,4 +1,4 @@
-"""TDK ICM-426xx motion sensors (the ICM-42627 on the Freematics ONE+ Model B).
+"""TDK ICM-426xx motion sensors (the ICM-42627 so far).
 
 Awake: movement (a binary sensor), impacts (a sensor of each one's peak) and
 the chip's temperature, from 100 accelerometer samples a second. Before deep

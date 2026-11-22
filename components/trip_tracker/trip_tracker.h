@@ -82,8 +82,8 @@ class TripTracker : public Component {
 #endif
   void add_listener(Listener *l) { this->listeners_.push_back(l); }
 
-  /// A valid GNSS fix from any source with these members (freematics_link's
-  /// Fix): epoch (Unix seconds; 0 when unknown), latitude, longitude,
+  /// A valid GNSS fix from any source with these members (a GNSS
+  /// component's own fix type): epoch (Unix seconds; 0 when unknown), latitude, longitude,
   /// speed_kmh, course_deg, altitude_m, satellites, hdop.
   template<typename F> void add_fix(const F &f) {
     Fix fix{f.epoch,

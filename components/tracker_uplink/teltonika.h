@@ -192,22 +192,4 @@ inline int parse_ack(const uint8_t *buf, size_t len, uint8_t location_packet_id)
   return buf[6];
 }
 
-// GNSS date (ddmmyy) and time (hhmmsscc), as the Freematics co-processor reports
-// them, to Unix seconds. Returns 0 for an invalid date.
-inline uint32_t gnss_to_unix(uint32_t ddmmyy, uint32_t hhmmsscc) {
-  uint32_t day = ddmmyy / 10000, month = (ddmmyy / 100) % 100, year = 2000 + ddmmyy % 100;
-  uint32_t hour = hhmmsscc / 1000000, minute = (hhmmsscc / 10000) % 100, second = (hhmmsscc / 100) % 100;
-  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2020 || hour > 23 || minute > 59 || second > 60)
-    return 0;
-  // days from civil (Howard Hinnant's algorithm)
-  int y = static_cast<int>(year) - (month <= 2 ? 1 : 0);
-  int era = y / 400;
-  unsigned yoe = static_cast<unsigned>(y - era * 400);
-  unsigned m = month;
-  unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + day - 1;
-  unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  int64_t days = static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(doe) - 719468;
-  return static_cast<uint32_t>(days * 86400 + hour * 3600 + minute * 60 + second);
-}
-
 }  // namespace trackcodec

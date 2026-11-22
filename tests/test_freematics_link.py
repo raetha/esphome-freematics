@@ -63,6 +63,21 @@ def test_gnifo_reply(cli):
 
 
 @pytest.mark.parametrize(
+    ("date", "time", "expected"),
+    [
+        (191126, 18300500, datetime(2026, 11, 19, 18, 30, 5, tzinfo=UTC)),
+        (290228, 23595999, datetime(2028, 2, 29, 23, 59, 59, tzinfo=UTC)),
+        (10130, 0, datetime(2030, 1, 1, tzinfo=UTC)),
+        (321326, 0, None),  # no such date
+    ],
+)
+def test_gnss_time(cli, date, time, expected):
+    reply = f"$GNIFO,{date},{time},40712776,-74005974,1234,2830,27100,9,12"
+    epoch = int(cli(f"gnifo {reply}")[0].split()[2])
+    assert epoch == (int(expected.timestamp()) if expected else 0)
+
+
+@pytest.mark.parametrize(
     "reply",
     [
         "$GNIFO,0,0,0,0,0,0,0,0,0",  # no fix yet

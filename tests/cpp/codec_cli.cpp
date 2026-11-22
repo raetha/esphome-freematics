@@ -164,10 +164,6 @@ int main() {
       for (size_t i = 0; i < n; i++)
         std::sscanf(hex + 2 * i, "%2hhx", &b[i]);
       std::printf("%d\n", parse_ack(b, n, lpid));
-    } else if (!std::strcmp(cmd, "unix")) {
-      unsigned d, t;
-      std::scanf("%u %u", &d, &t);
-      std::printf("%u\n", gnss_to_unix(d, t));
     } else if (!std::strcmp(cmd, "track")) {
       TrackerConfig c;
       unsigned stop, interval, min_turn, hb, start_fixes, n;

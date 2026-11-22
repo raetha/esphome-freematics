@@ -15,8 +15,8 @@
 
 namespace esphome::icm426xx {
 
-/// TDK's ICM-426xx motion sensors (the ICM-42627 on the Freematics ONE+ Model
-/// B). Awake, the accelerometer streams 100 samples a second through its FIFO:
+/// TDK's ICM-426xx motion sensors (the ICM-42627 so far: others are refused by
+/// their WHO_AM_I until someone tests them). Awake, the accelerometer streams 100 samples a second through its FIFO:
 /// a motion binary sensor is on while the device is being moved, an impact
 /// sensor reports each impact's peak, and a temperature sensor reads the chip.
 /// Before deep sleep, arm_wake() leaves it in low-power wake-on-motion, which

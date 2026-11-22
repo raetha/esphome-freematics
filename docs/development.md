@@ -57,6 +57,7 @@ ESPHome has no quality scale like Home Assistant's. What it has are the [rules f
 - [ ] **Host tests** for the logic that doesn't need ESPHome (encoders, filters, queues), kept in plain headers with no ESPHome dependencies, built with g++ by `pytest` (`tests/cpp/`).
 - [ ] **A component test config,** `tests/components/<component>/test.esp32-idf.yaml`, using every option and automation; CI compiles it.
 - [ ] **Docs:** its options and behavior in the docs here, and a changelog line.
+- [ ] **Generic where it can be:** a component meant for other boards (see [plan.md](plan.md) → "Generic components") names no Freematics hardware or setting in its code, schema, defaults, log lines or test config; what this dongle needs goes in the board package. Comments may say what it's been tested on.
 - [ ] **For this project:** its data use weighed and written down, and nothing sent to the vehicle bus.
 
 ## Vehicle safety

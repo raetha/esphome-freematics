@@ -47,6 +47,17 @@ From a design review before the side-by-side drives, at the owner's go-ahead.
 - **GNSS restart**: after 10 minutes without a fix, `ATGPSOFF` then `ATGPSON`, as the telelogger does (co-processor commands; nothing reaches the bus).
 - **Set aside** ([backlog.md](backlog.md)): Bluetooth presence (who's in the car), GPX tracks, the SIM7070's own GNSS, its power-saving modes, settings in the webhook's answer. Remote commands: not wanted.
 
+## Generic components
+
+Decided 2026-11-22 (the owner): nothing moves while the dongles are being tested. Once this project is stable (after its first release, with the components proven in the cars for a few weeks), the components useful beyond this dongle move to a repository of their own, with their own documentation and tests, and are then offered to ESPHome itself. Until then they live here, and stay generic: nothing in them names this dongle (the component checklist in [development.md](development.md) checks it).
+
+| Component | Where it goes | What it needs first |
+| --- | --- | --- |
+| `sd_card`, `file_queue`, `file_logger` | The generic repository, then ESPHome (it has no SD card support) | Documentation of their own, in ESPHome's format |
+| `icm426xx` | The generic repository, then ESPHome (it has no ICM-426xx support) | What ESPHome's other motion sensors offer (`icm20689`, `bmi270`, `lsm6ds`): acceleration and gyroscope per axis as sensors, the gyroscope at all; SPI as well as I2C. Other family members (ICM-42605, ICM-42688) only once someone tests them: until then their WHO_AM_I is refused, which says so. Full support of every chip feature isn't the aim. |
+| `trip_tracker`, `tracker_uplink` | A tracking repository, perhaps with the Home Assistant integration; not ESPHome itself as they stand | Names that don't depend on this project: the Home Assistant integration and its batch format are called Freematics today, which suits this dongle and not another tracker |
+| `freematics_link` | Stays here | It speaks the Freematics co-processor's own commands |
+
 ## Phases
 
 1. **Phases 0 and 1: cellular, GPS to Traccar, Wi-Fi first** (built). Back up the stock flash (`esptool.py --port <port> read_flash 0 0x1000000 stock-car1.bin`). Paste `examples/car-traccar.yaml` into a new device in ESPHome Device Builder, set `traccar_host` and `traccar_device_id` (the device's existing Traccar identifier works), add the secrets, open UDP 5027 on the Traccar server, and install over USB from the browser. On the bench, watch the USB log: PPP up, `ATGPS` fixes, records queued, "Traccar acknowledged". Then drive: the trip in Traccar with sharp corners, a stop record, heartbeats while parked; Wi-Fi at home switching LTE off and back on when leaving. Read the real data use from Hologram after a few days. *Exit:* a week of commutes in one car with every trip complete in Traccar and data use near the estimate in [configurations.md](configurations.md).
@@ -75,6 +86,7 @@ From a design review before the side-by-side drives, at the owner's go-ahead.
 
 ## Log
 
+- 2026-11-22: The owner decided the generic components move to a repository of their own once the project is stable, and then to ESPHome; until then they stay here and generic (plan above, checklist in development.md). Removed the last references to this dongle from them (`icm426xx`, `trip_tracker`), and a leftover copy of the GNSS date conversion from `tracker_uplink` (`freematics_link` owns it; its tests moved there).
 - 2026-11-22: Design rework before the side-by-side drives (owner: "a modular design for [protocols] would be best", and to shore up the component design now): `trip_tracker`, transports in `tracker_uplink`, the `icm426xx` component, extras (temperature, signal, impact, next report), GNSS restart; details above. Substitutions moved: `traccar_moving_speed`, `traccar_start_*`, `traccar_stop_delay`, `traccar_start_motion` and `ha_start_motion` are now the board package's `trip_*`; `motion_mg` is `motion_threshold`. The owner asked for temperature and signal only where they ride along with records already sent, and impacts reported at once, for an automation to tell the family or call for help.
 - 2026-11-21: First real webhook posts (freematics-eli through Home Assistant Cloud) answered HTTP 400: the cloud relays a webhook's body as a UTF-8 string, so the binary batch arrived mangled. Batches now go as base64 text (`text/plain`, a third more payload, small beside the HTTPS overhead), and the integration decodes base64. A kept connection that the server had closed failed once ("Software caused connection abort") and the retry on a new connection went through, as designed. The dongle's cellular module did answer, after several presses ("Autodetect mode: 1" at 2 minutes), then registered as searching with no signal indoors; Wi-Fi on access point 9E:05:D6:A0:D0:0E dropped it about every 40 s at -62 dB.
 

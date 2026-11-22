@@ -64,7 +64,7 @@ trip_tracker:
   on_impact:
     - lambda: ESP_LOGW("test", "impact %.1f g", peak_g);
 
-# A fix source with the members add_fix reads (freematics_link's Fix has them)
+# A fix source with the members add_fix reads
 interval:
   - interval: 2s
     then:

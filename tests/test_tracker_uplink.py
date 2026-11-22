@@ -156,23 +156,6 @@ def test_ack(cli):
     assert cli("ack 000500 3\n") == ["-1"]
 
 
-@pytest.mark.parametrize(
-    ("date", "time", "expected"),
-    [
-        (191126, 18300500, datetime(2026, 11, 19, 18, 30, 5, tzinfo=UTC)),
-        (290228, 23595999, datetime(2028, 2, 29, 23, 59, 59, tzinfo=UTC)),
-        (10130, 0, datetime(2030, 1, 1, tzinfo=UTC)),
-    ],
-)
-def test_gnss_time(cli, date, time, expected):
-    assert int(cli(f"unix {date} {time}\n")[0]) == int(expected.timestamp())
-
-
-def test_gnss_time_rejects_nonsense(cli):
-    assert cli("unix 0 0\n") == ["0"]
-    assert cli("unix 321326 0\n") == ["0"]
-
-
 def track(
     cli,
     events,
