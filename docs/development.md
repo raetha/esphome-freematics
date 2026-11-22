@@ -10,7 +10,7 @@
 | `components/trip_tracker/` | One car's trips, decided once for every uplink; `trip.h` is plain C++, tested on the host |
 | `components/tracker_uplink/` | The uplink component: one server's sampling and queue, and a transport per protocol (`transport.h`; `transports.py` lists them): Traccar over UDP (`udp_transport.cpp`) or Home Assistant's webhook (`webhook.cpp`, ESP-IDF's HTTP client in a task of its own); `teltonika.h`, `freematics_text.h`, `compact.h`, `tracker.h` and `backlog.h` are plain C++ with no ESPHome dependencies, tested on the host |
 | `components/icm426xx/` | The motion sensor: movement, impacts and temperature, and wake-on-motion before deep sleep; `motion.h` is plain C++, tested on the host |
-| `components/sd_card/`, `components/file_queue/`, `components/file_logger/` | Generic: the microSD card, a fixed-record file queue that survives resets, the log written to a file |
+| `components/sd_card/`, `components/file_queue/`, `components/file_logger/` | Generic: the microSD card, a fixed-record file queue that survives resets, the log written to a file (and downloadable over HTTP) |
 | `examples/` | A complete device config per configuration, pasteable on its own: packages and components come from GitHub (`url:`, `github://`), never `!include`. CI builds each from the checkout instead (`scripts/localize.py`) with `examples/secrets.example.yaml` |
 | `docs/plan.md` | Status, decisions, phases and open questions: keep it current |
 | `docs/hardware.md`, `docs/networking.md` | Hardware facts and sources; Wi-Fi/LTE/WireGuard and data use |

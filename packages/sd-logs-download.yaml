@@ -1,0 +1,27 @@
+# Download the SD card's log over the local network, without taking the card
+# out: http://<device>.local/log (the current file) and /log.1 (the one
+# before), behind a username and password. ESPHome's bare HTTP server (no web
+# dashboard): a listening socket and the server's task, used only while a
+# download runs. It listens on every network, but over cellular nothing can
+# reach it: Hologram, like most IoT carriers, gives the dongle a private
+# address behind its own NAT.
+#
+# The dongle answers only while it's awake: after parking at home it stays
+# awake for standby_after (10 minutes); the standby package's "Stay awake"
+# switch keeps it up longer.
+#
+# Needs sd-logs.yaml. Substitutions a device config must set:
+# sd_log_password (8 characters or more, from its own secret:
+# !secret volvo_log_password).
+
+substitutions:
+  sd_log_username: logs     # the download's username
+
+web_server_base:
+  id: log_server
+
+file_logger:
+  http:
+    web_server_base_id: log_server
+    username: ${sd_log_username}
+    password: ${sd_log_password}

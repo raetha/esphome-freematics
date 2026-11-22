@@ -2,16 +2,38 @@
 
 #include <atomic>
 #include <cstdio>
+#include <memory>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include "esphome/core/component.h"
+#include "esphome/core/defines.h"
 #include "esphome/core/helpers.h"
+#ifdef USE_FILE_LOGGER_HTTP
+#include "esphome/components/web_server_base/web_server_base.h"
+#endif
 
 #include "log_line.h"
 
 namespace esphome::file_logger {
+
+class FileLogger;
+
+#ifdef USE_FILE_LOGGER_HTTP
+/// Serves the log files over HTTP: /log (the current one) and /log.1 (the
+/// one before), behind the web server's password. Runs in the HTTP server's
+/// own task, reading the card a block at a time.
+class LogDownloadHandler final : public AsyncWebHandler {
+ public:
+  explicit LogDownloadHandler(FileLogger *parent) : parent_(parent) {}
+  bool canHandle(AsyncWebServerRequest *request) const override;
+  void handleRequest(AsyncWebServerRequest *request) override;
+
+ protected:
+  FileLogger *parent_;
+};
+#endif
 
 /// Writes the device's log to a file (on an SD card, sd_card), so what happened
 /// away from Wi-Fi can be read later. Lines wait in memory; a low-priority task
@@ -35,6 +57,13 @@ class FileLogger final : public Component {
   void set_flush_interval(uint32_t ms) { this->flush_interval_ = ms; }
 
   void on_log(uint8_t level, const char *tag, const char *message, size_t message_len);
+
+#ifdef USE_FILE_LOGGER_HTTP
+  void set_web_server(web_server_base::WebServerBase *base) { this->web_server_ = base; }
+  /// Sends a log file to an HTTP request (old: the one before the current);
+  /// false when another download is under way.
+  bool send_file(httpd_req_t *req, bool old);
+#endif
 
  protected:
   static void writer_task_(void *self);
@@ -61,6 +90,14 @@ class FileLogger final : public Component {
   uint32_t flush_interval_{10000};
   uint8_t level_{7};
   bool warned_{false};
+  // Held while the files are renamed, and while one is being downloaded.
+  Mutex file_lock_;
+#ifdef USE_FILE_LOGGER_HTTP
+  web_server_base::WebServerBase *web_server_{nullptr};
+  LogDownloadHandler handler_{this};
+  std::unique_ptr<char[]> chunk_;  // NOLINT(cppcoreguidelines-avoid-c-arrays)
+  std::atomic<bool> sending_{false};
+#endif
 };
 
 }  // namespace esphome::file_logger

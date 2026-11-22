@@ -17,6 +17,14 @@ external_components:
       path: ../../../components
     components: [sd_card, file_logger]
 
+wifi:
+  ssid: MySSID
+  password: password1
+
+# The download's HTTP server (ESPHome's bare one, without the web dashboard)
+web_server_base:
+  id: http_server
+
 spi:
   id: sd_bus
   clk_pin: GPIO18
@@ -33,3 +41,7 @@ file_logger:
   max_size: 64kB
   buffer_size: 2048
   flush_interval: 5s
+  http:
+    web_server_base_id: http_server
+    username: logs
+    password: a-long-password

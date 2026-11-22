@@ -58,6 +58,9 @@ substitutions:
   # sd_log_level: DEBUG       # what goes into the log on the card
   # sd_log_max_size: 1MB      # two files at most: 2 MB
 
+  # SD card: log download (sd-logs-download.yaml)
+  # sd_log_username: logs     # the download's username
+
   # Sleep while parked (standby.yaml)
   # standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
   # standby_min_voltage: "9.0"    # V: below, the dongle is powered over USB, not the OBD port
@@ -67,6 +70,7 @@ substitutions:
   # standby_heartbeat: "6"        # hours: wake fully to report one record this often; "0": never
   # standby_motion_mg: "150"      # mg: a change this big between samples wakes it (doors, towing); "0": no motion wake
   # standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
+  # standby_stay_awake: 30min     # the "Stay awake" switch turns itself off after this
   # End of the optional settings.
 
 packages:
@@ -81,6 +85,8 @@ packages:
       # Optional: the SD card, keeping the log on it
       # - packages/sd-card.yaml
       # - packages/sd-logs.yaml
+      # Optional: download that log over Wi-Fi (set sd_log_password: !secret car1_log_password above)
+      # - packages/sd-logs-download.yaml
       # Optional: sleep while parked, waking when the car is turned on or moved
       # - packages/standby.yaml
       # Also reporting to Traccar: add uplink-traccar.yaml here and its

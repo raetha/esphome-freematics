@@ -44,6 +44,7 @@ def _blocks(text: str) -> list[tuple[str | None, list[str]]]:
 # What an optional package needs from the device config, for the optional build.
 REQUIRED = {
     "packages/uplink-ha-webhook.yaml": {"ha_webhook_url": "!secret car1_webhook_url"},
+    "packages/sd-logs-download.yaml": {"sd_log_password": "!secret car1_log_password"},
 }
 
 _OPTIONAL = re.compile(r"^\s+#\s*-\s+(packages/\S+\.yaml)\s*$")

@@ -20,6 +20,9 @@ static constexpr size_t WRITE_CHUNK = 512;
 static constexpr TickType_t IDLE_WAIT = pdMS_TO_TICKS(200);
 // Before a clock is set, lines carry the uptime instead of the date.
 static constexpr time_t CLOCK_SET = 1700000000;
+#ifdef USE_FILE_LOGGER_HTTP
+static constexpr size_t DOWNLOAD_CHUNK = 2048;
+#endif
 
 void FileLogger::setup() {
   this->ring_.init(this->buffer_size_);
@@ -29,6 +32,13 @@ void FileLogger::setup() {
           static_cast<FileLogger *>(self)->on_log(level, tag, message, message_len);
         });
   }
+#ifdef USE_FILE_LOGGER_HTTP
+  if (this->web_server_ != nullptr) {
+    this->chunk_ = std::make_unique<char[]>(DOWNLOAD_CHUNK);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
+    this->web_server_->add_handler(&this->handler_);
+    this->web_server_->init();
+  }
+#endif
   // Below the main loop's priority, on either core: it only drains the buffer.
   if (xTaskCreate(writer_task_, "file_logger", 4096, this, 1, &this->task_) != pdPASS)
     this->mark_failed(LOG_STR("Couldn't start the writer task"));
@@ -148,6 +158,7 @@ void FileLogger::write_loop_() {
 }
 
 void FileLogger::rotate_() {
+  LockGuard guard(this->file_lock_);  // not while a download reads the file
   fclose(this->file_);
   this->file_ = nullptr;
   char old[72];
@@ -170,6 +181,61 @@ void FileLogger::dump_config() {
                 "  Written since boot: %" PRIu32 " bytes; dropped lines waiting: %" PRIu32,
                 this->path_, this->is_open_.load() ? "open" : "not open", this->max_size_, this->path_,
                 this->written_.load(), dropped);
+#ifdef USE_FILE_LOGGER_HTTP
+  if (this->web_server_ != nullptr)
+    ESP_LOGCONFIG(TAG, "  Download: http://<device>:%u/log and /log.1, with the web server's password",
+                  this->web_server_->get_port());
+#endif
 }
+
+#ifdef USE_FILE_LOGGER_HTTP
+bool LogDownloadHandler::canHandle(AsyncWebServerRequest *request) const {
+  if (request->method() != HTTP_GET)
+    return false;
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  StringRef url = request->url_to(buf);
+  return url == "/log" || url == "/log.1";
+}
+
+void LogDownloadHandler::handleRequest(AsyncWebServerRequest *request) {
+  char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+  bool old = request->url_to(buf) == "/log.1";
+  if (!this->parent_->send_file(*request, old))
+    request->send(503, "text/plain", "Another download is under way");
+}
+
+bool FileLogger::send_file(httpd_req_t *req, bool old) {
+  bool expected = false;
+  if (!this->sending_.compare_exchange_strong(expected, true))
+    return false;
+  char path[72];
+  snprintf(path, sizeof(path), old ? "%s.1" : "%s", this->path_);
+  // What's waiting goes to the file first (by the next write, within a moment).
+  this->sync_now_.store(true);
+  {
+    LockGuard guard(this->file_lock_);
+    FILE *f = fopen(path, "r");
+    if (f == nullptr) {
+      httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "No such log file");
+    } else {
+      httpd_resp_set_type(req, "text/plain; charset=utf-8");
+      const char *name = old ? "attachment; filename=\"esphome.log.1\"" : "attachment; filename=\"esphome.log\"";
+      httpd_resp_set_hdr(req, "Content-Disposition", name);
+      size_t n;
+      size_t total = 0;
+      bool ok = true;
+      while (ok && (n = fread(this->chunk_.get(), 1, DOWNLOAD_CHUNK, f)) > 0) {
+        ok = httpd_resp_send_chunk(req, this->chunk_.get(), static_cast<ssize_t>(n)) == ESP_OK;
+        total += n;
+      }
+      fclose(f);
+      httpd_resp_send_chunk(req, nullptr, 0);
+      ESP_LOGI(TAG, "Sent %s over HTTP (%u bytes%s)", path, (unsigned) total, ok ? "" : ", cut short");
+    }
+  }
+  this->sending_.store(false);
+  return true;
+}
+#endif
 
 }  // namespace esphome::file_logger

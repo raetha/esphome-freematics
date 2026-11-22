@@ -25,6 +25,11 @@
 # Model B's, as Freematics' own driver identifies it). Without a known sensor,
 # the device sleeps as before, waking on voltage and heartbeats only.
 #
+# A "Stay awake" switch (Home Assistant, through the native API, while the
+# dongle is awake on Wi-Fi) holds off sleep for standby_stay_awake, to update
+# it or download its log; it turns itself off then, so a forgotten switch
+# can't drain the car's battery.
+#
 # Before sleeping it tells each uplink when it will report again (the next
 # heartbeat wake), so Home Assistant shows it as reporting until then.
 #
@@ -41,6 +46,7 @@ substitutions:
   standby_heartbeat: "6"        # hours: wake fully to report one record this often; "0": never
   standby_motion_mg: "150"      # mg: a change this big between samples wakes it (doors, towing); "0": no motion wake
   standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
+  standby_stay_awake: 30min     # the "Stay awake" switch turns itself off after this
 
 deep_sleep:
   id: sleeper
@@ -141,7 +147,7 @@ interval:
       - if:
           condition:
             lambda: |-
-              if (id(enter_standby).is_running())
+              if (id(enter_standby).is_running() || id(stay_awake).state)
                 return false;
               if (id(heartbeat_wake))
                 return id(parked_s) >= ${standby_report_time} ||
@@ -150,7 +156,26 @@ interval:
           then:
             - script.execute: enter_standby
 
+switch:
+  - platform: template
+    id: stay_awake
+    name: Stay awake
+    icon: mdi:sleep-off
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    entity_category: config
+    on_turn_on:
+      - logger.log: "Standby: staying awake (${standby_stay_awake} at most)"
+      - script.execute: stay_awake_timeout
+    on_turn_off:
+      - script.stop: stay_awake_timeout
+
 script:
+  - id: stay_awake_timeout
+    mode: restart
+    then:
+      - delay: ${standby_stay_awake}
+      - switch.turn_off: stay_awake
   - id: enter_standby
     mode: single
     then:

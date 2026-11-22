@@ -29,6 +29,7 @@ TITLES = {
     "uplink-ha-webhook.yaml": "Home Assistant integration (uplink-ha-webhook.yaml)",
     "sd-traccar.yaml": "SD card: records (sd-traccar.yaml)",
     "sd-logs.yaml": "SD card: log (sd-logs.yaml)",
+    "sd-logs-download.yaml": "SD card: log download (sd-logs-download.yaml)",
     "standby.yaml": "Sleep while parked (standby.yaml)",
 }
 

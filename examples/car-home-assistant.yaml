@@ -52,6 +52,9 @@ substitutions:
   # SD card: log (sd-logs.yaml)
   # sd_log_level: DEBUG       # what goes into the log on the card
   # sd_log_max_size: 1MB      # two files at most: 2 MB
+
+  # SD card: log download (sd-logs-download.yaml)
+  # sd_log_username: logs     # the download's username
   # End of the optional settings.
 
 packages:
@@ -66,6 +69,8 @@ packages:
       # Optional: the device's log on the SD card
       # - packages/sd-card.yaml
       # - packages/sd-logs.yaml
+      # Optional: download that log over Wi-Fi (set sd_log_password: !secret car1_log_password above)
+      # - packages/sd-logs-download.yaml
 
 external_components:
   - source: github://raetha/esphome-freematics@dev
