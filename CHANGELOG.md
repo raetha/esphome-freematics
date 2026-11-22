@@ -45,5 +45,6 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - The Teltonika encoder is checked against a real Traccar server (`tests/test_traccar_server.py`, run when `TRACCAR_UDP` is set).
 - Components follow ESPHome's own rules for components (clang-format, clang-tidy, no memory allocation while running, a component test config), checked in CI.
 - Repository workflow: `dev`/`main` branches, changelog checks, `esphome config` and `esphome compile` of every example and component test in CI, test builds as pre-release tags, Dependabot.
+- The license names the copyright holder as Elias Hunt (raetha).
 
 [Unreleased]: https://github.com/raetha/esphome-freematics/commits/dev
