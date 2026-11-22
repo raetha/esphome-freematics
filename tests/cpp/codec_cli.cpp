@@ -1,5 +1,5 @@
-// Host harness for components/traccar_uplink: encodes packets and runs the
-// tracker from commands on stdin, printing results for tests/test_traccar_uplink.py.
+// Host harness for components/tracker_uplink: encodes packets and runs the
+// tracker from commands on stdin, printing results for tests/test_tracker_uplink.py.
 //
 //   packet <packet_id> <location_packet_id> <device_id> <n> then n lines:
 //     <time> <has_location> <lat> <lon> <speed> <course> <sats> <battery_mv> <motion>

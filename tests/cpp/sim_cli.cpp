@@ -1,5 +1,5 @@
 // Simulates a day through the tracking filter and the GH3000 encoder, the way
-// traccar_uplink batches records, and prints what goes over the network.
+// tracker_uplink batches records, and prints what goes over the network.
 //
 //   sim_cli <drive minutes> <parked hours on LTE> [send interval s] [heartbeat s]
 //

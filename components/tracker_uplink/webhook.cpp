@@ -8,9 +8,9 @@
 
 #include "esphome/core/log.h"
 
-namespace esphome::traccar_uplink {
+namespace esphome::tracker_uplink {
 
-static const char *const TAG = "traccar_uplink.webhook";
+static const char *const TAG = "tracker_uplink.webhook";
 
 bool WebhookPoster::start(const std::string &url, size_t max_body) {
   this->body_ = std::make_unique<uint8_t[]>(max_body);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
@@ -83,6 +83,6 @@ void WebhookPoster::task_(void *arg) {
   }
 }
 
-}  // namespace esphome::traccar_uplink
+}  // namespace esphome::tracker_uplink
 
 #endif  // USE_UPLINK_WEBHOOK

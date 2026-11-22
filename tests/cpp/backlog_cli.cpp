@@ -1,5 +1,5 @@
-// Drives components/traccar_uplink/backlog.h with a ring file as its store, for
-// tests/test_traccar_uplink.py.
+// Drives components/tracker_uplink/backlog.h with a ring file as its store, for
+// tests/test_tracker_uplink.py.
 //
 //   backlog_cli <memory capacity> <store path or -> <store capacity> <op>...
 //

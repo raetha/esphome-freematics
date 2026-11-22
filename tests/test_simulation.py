@@ -27,7 +27,7 @@ def sim(tmp_path_factory):
             "-Wall",
             "-Werror",
             "-I",
-            str(ROOT / "components" / "traccar_uplink"),
+            str(ROOT / "components" / "tracker_uplink"),
             str(ROOT / "tests" / "cpp" / "sim_cli.cpp"),
             "-o",
             str(exe),

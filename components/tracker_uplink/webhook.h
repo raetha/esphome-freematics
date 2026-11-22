@@ -14,7 +14,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-namespace esphome::traccar_uplink {
+namespace esphome::tracker_uplink {
 
 /// Posts a body to an HTTPS URL (a Home Assistant webhook) from a task of its
 /// own, so the main loop never waits for DNS, TCP, TLS or the server. One
@@ -50,6 +50,6 @@ class WebhookPoster {
   TaskHandle_t task_handle_{nullptr};
 };
 
-}  // namespace esphome::traccar_uplink
+}  // namespace esphome::tracker_uplink
 
 #endif  // USE_UPLINK_WEBHOOK

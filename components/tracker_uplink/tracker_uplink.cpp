@@ -1,4 +1,4 @@
-#include "traccar_uplink.h"
+#include "tracker_uplink.h"
 
 #include <algorithm>
 #include <cmath>
@@ -9,14 +9,14 @@
 #include "esphome/core/log.h"
 #include "esphome/components/network/util.h"
 
-namespace esphome::traccar_uplink {
+namespace esphome::tracker_uplink {
 
-static const char *const TAG = "traccar_uplink";
+static const char *const TAG = "tracker_uplink";
 
 // Timing uses the loop's start time, as ESPHome asks of components.
 static uint32_t now_ms() { return App.get_loop_component_start_time(); }
 
-void TraccarUplink::setup() {
+void TrackerUplink::setup() {
   // Everything that needs memory is allocated here, once.
   this->batch_ = std::make_unique<Record[]>(this->batch_max_);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
   this->backlog_.init(this->max_queue_, this->store_);
@@ -46,7 +46,7 @@ void TraccarUplink::setup() {
   this->socket_->setblocking(false);
 }
 
-void TraccarUplink::dump_config() {
+void TrackerUplink::dump_config() {
   const TrackerConfig &c = this->tracker_.config();
   if (this->webhook_()) {
     // The URL itself stays out of the log: the webhook ID in it is the only key.
@@ -95,7 +95,7 @@ void TraccarUplink::dump_config() {
   }
 }
 
-bool TraccarUplink::now_(uint32_t *unix) {
+bool TrackerUplink::now_(uint32_t *unix) {
   if (this->last_unix_ != 0) {
     *unix = this->last_unix_ + (now_ms() - this->last_unix_millis_) / 1000;
     return true;
@@ -112,7 +112,7 @@ bool TraccarUplink::now_(uint32_t *unix) {
   return false;
 }
 
-Record TraccarUplink::base_record_(uint32_t time, Decision why) {
+Record TrackerUplink::base_record_(uint32_t time, Decision why) {
   Record r{};
   r.time = time;
   r.kind = static_cast<uint8_t>(why);
@@ -128,7 +128,7 @@ Record TraccarUplink::base_record_(uint32_t time, Decision why) {
   return r;
 }
 
-void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh,
+void TrackerUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh,
                             float course_deg, uint8_t satellites, float altitude_m, uint8_t hdop) {
   uint32_t unix = ::trackcodec::gnss_to_unix(ddmmyy, hhmmsscc);
   if (unix == 0 && !this->now_(&unix))
@@ -165,7 +165,7 @@ void TraccarUplink::add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, 
   }
 }
 
-void TraccarUplink::enqueue_(const Record &record) {
+void TrackerUplink::enqueue_(const Record &record) {
   switch (this->backlog_.add(record, this->in_flight_count_)) {
     case ::trackcodec::Added::OK:
       break;
@@ -180,7 +180,7 @@ void TraccarUplink::enqueue_(const Record &record) {
            this->backlog_.stored() ? ", on file" : "");
 }
 
-void TraccarUplink::receive_() {
+void TrackerUplink::receive_() {
   uint8_t buf[32];
   for (int i = 0; i < 4; i++) {
     ssize_t len = this->socket_->recvfrom(buf, sizeof(buf), nullptr, nullptr);
@@ -225,7 +225,7 @@ void TraccarUplink::receive_() {
   }
 }
 
-void TraccarUplink::send_() {
+void TrackerUplink::send_() {
   if (this->backlog_.memory().empty())
     return;
   if (this->webhook_()) {
@@ -276,7 +276,7 @@ void TraccarUplink::send_() {
   ESP_LOGD(TAG, "Sent %u records in %u bytes", (unsigned) count, (unsigned) len);
 }
 
-void TraccarUplink::send_freematics_(const struct sockaddr *addr, socklen_t addr_len) {
+void TrackerUplink::send_freematics_(const struct sockaddr *addr, socklen_t addr_len) {
   uint32_t now = now_ms();
   char *out = reinterpret_cast<char *>(this->buf_);
   // A login until Traccar answers one (then every hour), to show it's listening.
@@ -325,7 +325,7 @@ static ::trackcodec::CompactKind compact_kind(uint8_t decision) {
   }
 }
 
-void TraccarUplink::send_webhook_() {
+void TrackerUplink::send_webhook_() {
 #ifdef USE_UPLINK_WEBHOOK
   if (!this->poster_.idle())
     return;
@@ -348,7 +348,7 @@ void TraccarUplink::send_webhook_() {
 #endif
 }
 
-void TraccarUplink::check_webhook_() {
+void TrackerUplink::check_webhook_() {
 #ifdef USE_UPLINK_WEBHOOK
   int status = this->poster_.take_result();
   if (status == 0)
@@ -378,7 +378,7 @@ void TraccarUplink::check_webhook_() {
 #endif
 }
 
-void TraccarUplink::loop() {
+void TrackerUplink::loop() {
   uint32_t now = now_ms();
 
   // Heartbeats while parked without a fix (the tracker ignores this while fixes flow).
@@ -432,4 +432,4 @@ void TraccarUplink::loop() {
     this->send_();
 }
 
-}  // namespace esphome::traccar_uplink
+}  // namespace esphome::tracker_uplink

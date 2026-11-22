@@ -1,4 +1,4 @@
-# ESPHome-style component test: every option and automation of traccar_uplink
+# ESPHome-style component test: every option and automation of tracker_uplink
 # (Traccar and Home Assistant's webhook side by side),
 # compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
 esphome:
@@ -19,7 +19,7 @@ external_components:
   - source:
       type: local
       path: ../../../components
-    components: [traccar_uplink]
+    components: [tracker_uplink]
 
 time:
   - platform: sntp
@@ -30,7 +30,7 @@ sensor:
     id: battery
     lambda: return 12.6;
 
-traccar_uplink:
+tracker_uplink:
   - id: traccar
     host: traccar.example.com
     port: 5027
@@ -50,7 +50,7 @@ traccar_uplink:
     on_motion_start:
       - logger.log: "moving"
     on_motion_stop:
-      - traccar_uplink.flush: traccar
+      - tracker_uplink.flush: traccar
 
   # A second uplink: Home Assistant's webhook, beside Traccar
   - id: ha_uplink

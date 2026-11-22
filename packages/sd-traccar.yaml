@@ -15,6 +15,6 @@ file_queue:
   capacity: ${traccar_stored_records}
   writer_task: ${traccar_store_writer_task}
 
-traccar_uplink:
+tracker_uplink:
   - id: !extend traccar
     file_queue_id: traccar_store

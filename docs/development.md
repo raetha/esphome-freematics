@@ -7,13 +7,13 @@
 | `packages/freematics-oneplus-b.yaml` | The board package every device config pulls in; its `esphome: project: version` is the release version |
 | `packages/wifi-first.yaml`, `packages/uplink-*.yaml` | Wi-Fi first; one uplink package per configuration ([configurations.md](configurations.md)) |
 | `components/freematics_link/` | The co-processor link component (GNSS, battery voltage, version, a time source); `link_parse.h` is plain C++, tested on the host |
-| `components/traccar_uplink/` | The Traccar uplink component; `teltonika.h` and `tracker.h` are plain C++ with no ESPHome dependencies, tested on the host |
+| `components/tracker_uplink/` | The Traccar uplink component; `teltonika.h` and `tracker.h` are plain C++ with no ESPHome dependencies, tested on the host |
 | `examples/` | A complete device config per configuration, pasteable on its own: packages and components come from GitHub (`url:`, `github://`), never `!include`. CI builds each from the checkout instead (`scripts/localize.py`) with `examples/secrets.example.yaml` |
 | `docs/plan.md` | Status, decisions, phases and open questions: keep it current |
 | `docs/hardware.md`, `docs/networking.md` | Hardware facts and sources; Wi-Fi/LTE/WireGuard and data use |
 | `docs/backlog.md`, `docs/audits.md` | Ideas set aside; review records |
 | `scripts/release.py`, `scripts/markdown.py`, `scripts/localize.py` | CI's changelog, version, test build and release-notes helpers; the Markdown line check; an example rewritten to use this checkout |
-| `tests/` | Tests for the scripts and workflows, `test_freematics_link.py`, which checks the co-processor reply parsing, and `test_traccar_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder, the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
+| `tests/` | Tests for the scripts and workflows, `test_freematics_link.py`, which checks the co-processor reply parsing, and `test_tracker_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder, the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
 | `.clang-format`, `.clang-tidy` | ESPHome's C++ rules, copied from esphome/esphome |
 
 ## Setup and testing
@@ -45,7 +45,7 @@ Testing on hardware follows [bench-tests.md](bench-tests.md), one thing per test
 ESPHome has no quality scale like Home Assistant's. What it has are the [rules for components](https://developers.esphome.io/contributing/code/) in its developer docs, enforced by its CI, and a [layout for component tests](https://developers.esphome.io/architecture/ci/component_tests/). Every component here meets them, checked before it's merged:
 
 - [ ] **Style:** ESPHome's `.clang-format` and `.clang-tidy` (copied to the repository root; CI runs both, clang-tidy on the plain C++ headers through `tests/cpp/tidy.cpp`), and ruff for the Python.
-- [ ] **Python:** `DOMAIN` matching the folder name; `CONF_` constants for keys; optional settings optional, with defaults that match the docs; actions that take a bare ID where that's natural (`traccar_uplink.flush: traccar`).
+- [ ] **Python:** `DOMAIN` matching the folder name; `CONF_` constants for keys; optional settings optional, with defaults that match the docs; actions that take a bare ID where that's natural (`tracker_uplink.flush: traccar`).
 - [ ] **No blocking:** nothing in `setup()` or `loop()` waits longer than a few milliseconds; network lookups are asynchronous.
 - [ ] **No heap allocation after `setup()`:** queues and buffers are sized from the configuration and allocated once.
 - [ ] **Timing** from `App.get_loop_component_start_time()`, not `millis()`.

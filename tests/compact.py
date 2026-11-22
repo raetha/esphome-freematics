@@ -1,4 +1,4 @@
-"""Decoder for the compact batches (components/traccar_uplink/compact.h).
+"""Decoder for the compact batches (components/tracker_uplink/compact.h).
 
 A copy of the Home Assistant integration's decoder
 (custom_components/freematics/compact.py in raetha/ha-freematics), so the

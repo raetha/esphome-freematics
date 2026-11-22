@@ -5,20 +5,22 @@
 # Assistant answers each batch; until it does, the records stay queued and go
 # out again. See docs/configurations.md.
 #
-# Needs the board package and the traccar_uplink component from this
+# Needs the board package and the tracker_uplink component from this
 # repository's components/ (external_components: in the device config), and the
-# webhook URL the integration shows when the device is added, as the secret
-# ha_webhook_url. Works beside uplink-traccar.yaml, to report to both.
+# webhook URL the integration shows when the device is added.
+# Works beside uplink-traccar.yaml, to report to both.
+#
+# Substitution a device config must set: ha_webhook_url (from a secret, one per
+# dongle: each has its own webhook).
 
 substitutions:
-  ha_webhook_url: !secret ha_webhook_url  # the webhook URL the integration shows, kept in Device Builder's secrets
   ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
   ha_moving_interval: 10s           # a record at least this often while moving
   ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none
   ha_altitude: "true"               # send altitude (a byte or two per record)
   ha_start_motion: "300"            # s: a trip starts only this soon after the motion sensor felt the car move; "0": GPS alone
 
-traccar_uplink:
+tracker_uplink:
   - id: ha_uplink
     protocol: home_assistant
     url: ${ha_webhook_url}

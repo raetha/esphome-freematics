@@ -1,4 +1,4 @@
-"""components/traccar_uplink: the Teltonika encoder against a Python mirror of
+"""components/tracker_uplink: the Teltonika encoder against a Python mirror of
 Traccar's decoder, the GNSS time conversion, and the tracking filter.
 
 Builds tests/cpp/codec_cli.cpp with the host's C++ compiler.
@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-COMPONENT = ROOT / "components" / "traccar_uplink"
+COMPONENT = ROOT / "components" / "tracker_uplink"
 CXX = shutil.which("g++") or shutil.which("c++")
 
 pytestmark = pytest.mark.skipif(CXX is None, reason="no C++ compiler")

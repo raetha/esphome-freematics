@@ -51,13 +51,13 @@ def test_local_components_replace_github_source():
         "packages:\n  x:\n    url: https://github.com/raetha/esphome-freematics\n"
         "    files: [packages/a.yaml, packages/b.yaml]\n"
         "external_components:\n  - source: github://raetha/esphome-freematics@dev\n"
-        "    components: [traccar_uplink]\nwifi:\n  ssid: x\n"
+        "    components: [tracker_uplink]\nwifi:\n  ssid: x\n"
     )
     out = localize.localize(text, Path("/repo"))
     assert "  a: !include /repo/packages/a.yaml" in out
     assert "  b: !include /repo/packages/b.yaml" in out
     assert "      path: /repo/components" in out
-    assert "    components: [traccar_uplink]" in out
+    assert "    components: [tracker_uplink]" in out
     assert out.endswith("wifi:\n  ssid: x\n")
 
 
@@ -77,6 +77,24 @@ def test_optional_packages():
     assert "b.yaml" not in plain and "  a: !include /repo/packages/a.yaml" in plain
     full = localize.localize(text, Path("/repo"), optional=True)
     assert "  b: !include /repo/packages/b.yaml" in full
+
+
+def test_optional_packages_get_the_settings_they_need():
+    text = (
+        "substitutions:\n  name: x\n"
+        "packages:\n  x:\n    url: https://github.com/raetha/esphome-freematics\n"
+        "    files:\n      - packages/a.yaml\n"
+        "      # - packages/uplink-ha-webhook.yaml\n"
+    )
+    plain = localize.localize(text, Path("/repo"))
+    assert "ha_webhook_url" not in plain
+    full = localize.localize(text, Path("/repo"), optional=True)
+    filled = "substitutions:\n  ha_webhook_url: !secret car1_webhook_url\n  name: x"
+    assert filled in full
+    # One the example sets itself is left alone.
+    text = text.replace("  name: x\n", "  name: x\n  ha_webhook_url: !secret mine\n")
+    full = localize.localize(text, Path("/repo"), optional=True)
+    assert full.count("ha_webhook_url") == 1
 
 
 def test_examples_list_every_optional_setting():

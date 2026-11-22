@@ -2,7 +2,7 @@
 # batched, acknowledged by Traccar, and kept in memory until they are.
 # Nothing here talks to Home Assistant. See docs/configurations.md.
 #
-# Needs the board package, and the traccar_uplink component from this
+# Needs the board package, and the tracker_uplink component from this
 # repository's components/ (external_components: in the device config).
 #
 # Substitutions a device config must set: traccar_host, traccar_device_id
@@ -23,7 +23,7 @@ substitutions:
   traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
   traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
 
-traccar_uplink:
+tracker_uplink:
   - id: traccar
     host: ${traccar_host}
     protocol: ${traccar_protocol}

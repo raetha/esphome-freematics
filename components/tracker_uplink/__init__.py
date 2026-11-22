@@ -8,7 +8,7 @@ from esphome.components import esp32, sensor, socket, time
 from esphome.const import CONF_ID, CONF_PORT, CONF_TIME_ID, CONF_URL
 from esphome.core import CORE
 
-DOMAIN = "traccar_uplink"
+DOMAIN = "tracker_uplink"
 CODEOWNERS = ["@raetha"]
 DEPENDENCIES = ["network"]
 MULTI_CONF = True  # Traccar and Home Assistant together
@@ -40,9 +40,9 @@ WEBHOOK = "home_assistant"
 # Bump when trackcodec::Record's layout changes, so stored files start afresh.
 RECORD_FORMAT = 3
 
-traccar_uplink_ns = cg.esphome_ns.namespace("traccar_uplink")
-TraccarUplink = traccar_uplink_ns.class_("TraccarUplink", cg.Component)
-FlushAction = traccar_uplink_ns.class_("FlushAction", automation.Action)
+tracker_uplink_ns = cg.esphome_ns.namespace("tracker_uplink")
+TrackerUplink = tracker_uplink_ns.class_("TrackerUplink", cg.Component)
+FlushAction = tracker_uplink_ns.class_("FlushAction", automation.Action)
 TrackerConfig = cg.global_ns.namespace("trackcodec").struct("TrackerConfig")
 FileQueue = cg.esphome_ns.namespace("file_queue").class_("FileQueue", cg.Component)
 
@@ -88,7 +88,7 @@ def _url(value):
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(TraccarUplink),
+            cv.GenerateID(): cv.declare_id(TrackerUplink),
             cv.Optional(CONF_HOST): cv.string_strict,
             cv.Optional(CONF_URL): _url,
             cv.Optional(CONF_PROTOCOL, default="teltonika"): cv.one_of(
@@ -126,8 +126,8 @@ CONFIG_SCHEMA = cv.All(
         }
     ).extend(cv.COMPONENT_SCHEMA),
     _protocol_fields,
-    socket.consume_sockets(1, "traccar_uplink", socket.SocketType.UDP),
-    socket.consume_sockets(1, "traccar_uplink", socket.SocketType.TCP),
+    socket.consume_sockets(1, "tracker_uplink", socket.SocketType.UDP),
+    socket.consume_sockets(1, "tracker_uplink", socket.SocketType.TCP),
 )
 
 
@@ -184,9 +184,9 @@ async def to_code(config):
 
 
 @automation.register_action(
-    "traccar_uplink.flush",
+    "tracker_uplink.flush",
     FlushAction,
-    cv.maybe_simple_value({cv.GenerateID(): cv.use_id(TraccarUplink)}, key=CONF_ID),
+    cv.maybe_simple_value({cv.GenerateID(): cv.use_id(TrackerUplink)}, key=CONF_ID),
     synchronous=True,
 )
 async def flush_to_code(config, action_id, template_arg, args):

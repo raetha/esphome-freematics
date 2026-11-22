@@ -5,14 +5,14 @@
 # Paste this whole file into a new device in ESPHome Device Builder, change the
 # substitutions below, and install. Everything else comes from GitHub.
 # Secrets it uses (Device Builder -> Secrets): wifi_ssid, wifi_password,
-# freematics_api_key, and ha_webhook_url: the webhook URL the integration shows
-# when you add the device in Home Assistant.
+# freematics_api_key, and the webhook URL the integration shows when you add the
+# dongle in Home Assistant (one secret per dongle, named in ha_webhook_url below).
 
 substitutions:
   name: freematics-car1
   friendly_name: Car 1
   cell_apn: hologram
-  standby_uplink: ha_uplink            # for packages/standby.yaml below
+  ha_webhook_url: !secret car1_webhook_url   # this dongle's webhook URL, from the Freematics integration
   # Optional settings, with their defaults: uncomment a line to change it.
   # The board: cellular module, GPS, beeps, logs
   # modem_model: SIM7070          # the cellular module: SIM7070 (SIM7070G), or SIM7600 (untested)
@@ -42,7 +42,6 @@ substitutions:
   # lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
 
   # Home Assistant integration (uplink-ha-webhook.yaml)
-  # ha_webhook_url: !secret ha_webhook_url  # the webhook URL the integration shows, kept in Device Builder's secrets
   # ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
   # ha_moving_interval: 10s           # a record at least this often while moving
   # ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none
@@ -54,7 +53,6 @@ substitutions:
   # sd_log_max_size: 1MB      # two files at most: 2 MB
 
   # Sleep while parked (standby.yaml)
-  # standby_uplink: traccar       # the uplink to empty before sleeping: traccar, or ha_uplink in the Home Assistant integration configuration
   # standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
   # standby_min_voltage: "9.0"    # V: below, the dongle is powered over USB, not the OBD port
   # standby_on_usb: "true"        # on USB power, sleep once the motion sensor has felt nothing for standby_after; "false": stay awake (a bench)
@@ -85,7 +83,7 @@ packages:
 external_components:
   - source: github://raetha/esphome-freematics@dev
     refresh: 0s
-    components: [freematics_link, traccar_uplink, sd_card, file_queue, file_logger]
+    components: [freematics_link, tracker_uplink, sd_card, file_queue, file_logger]
 
 wifi:
   networks:

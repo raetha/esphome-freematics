@@ -25,11 +25,11 @@
 # Model B's, as Freematics' own driver identifies it). Without a known sensor,
 # the device sleeps as before, waking on voltage and heartbeats only.
 #
-# Needs the board package, an uplink package (traccar_uplink with the id in standby_uplink)
+# Needs the board package and an uplink package (tracker_uplink; with several,
+# Traccar and Home Assistant, it waits for all of them)
 # and the battery_voltage sensor; the SD card packages are synced before sleep.
 
 substitutions:
-  standby_uplink: traccar       # the uplink to empty before sleeping: traccar, or ha_uplink in the Home Assistant integration configuration
   standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
   standby_min_voltage: "9.0"    # V: below, the dongle is powered over USB, not the OBD port
   standby_on_usb: "true"        # on USB power, sleep once the motion sensor has felt nothing for standby_after; "false": stay awake (a bench)
@@ -140,7 +140,7 @@ interval:
                     (id(motion_ms) == 0 || millis() - id(motion_ms) >= 10000);
           else
             still = v < ${standby_voltage};
-          if (still && !id(${standby_uplink}).is_moving())
+          if (still && !tracker_uplink::TrackerUplink::any_moving())
             id(parked_s) += 10;
           else
             id(parked_s) = 0;
@@ -151,7 +151,8 @@ interval:
                 return false;
               if (id(heartbeat_wake))
                 return id(parked_s) >= ${standby_report_time} ||
-                       (id(parked_s) >= 60 && id(${standby_uplink}).queue_size() == 0 && id(${standby_uplink}).records_sent() > 0);
+                       (id(parked_s) >= 60 && tracker_uplink::TrackerUplink::total_queued() == 0 &&
+                        tracker_uplink::TrackerUplink::all_sent());
               return id(parked_s) >= ${standby_after};
           then:
             - script.execute: enter_standby
@@ -161,10 +162,10 @@ script:
     mode: single
     then:
       - logger.log: "Standby: parked; sending what's waiting, then sleeping"
-      - lambda: id(${standby_uplink}).flush();
+      - lambda: tracker_uplink::TrackerUplink::flush_all();
       - wait_until:
           condition:
-            lambda: return id(${standby_uplink}).queue_size() == 0;
+            lambda: return tracker_uplink::TrackerUplink::total_queued() == 0;
           timeout: 60s
       - lambda: id(coproc_link).enter_standby();
       - wait_until:

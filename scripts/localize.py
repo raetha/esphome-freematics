@@ -13,7 +13,9 @@ next to it (CI copies examples/secrets.example.yaml).
 
 With --optional it also writes build/local/car-traccar-optional.yaml, with the
 package files the example lists commented out ("# - packages/sd-card.yaml")
-included as well, so CI builds the optional packages too.
+included as well, so CI builds the optional packages too, and the settings an
+optional package needs from the device config (REQUIRED below) filled in when
+the example doesn't set them.
 """
 
 from __future__ import annotations
@@ -38,6 +40,11 @@ def _blocks(text: str) -> list[tuple[str | None, list[str]]]:
             blocks[-1][1].append(line)
     return blocks
 
+
+# What an optional package needs from the device config, for the optional build.
+REQUIRED = {
+    "packages/uplink-ha-webhook.yaml": {"ha_webhook_url": "!secret car1_webhook_url"},
+}
 
 _OPTIONAL = re.compile(r"^\s+#\s*-\s+(packages/\S+\.yaml)\s*$")
 
@@ -72,7 +79,20 @@ def has_optional(text: str) -> bool:
 
 def localize(text: str, root: Path = ROOT, optional: bool = False) -> str:
     out: list[str] = []
+    needed: dict[str, str] = {}
+    if optional:
+        for key, lines in _blocks(text):
+            if key == "packages":
+                for f in _package_files(lines, optional=True):
+                    needed.update(REQUIRED.get(f, {}))
     for key, lines in _blocks(text):
+        if key == "substitutions" and needed:
+            out.extend(lines[:1])
+            for name, value in needed.items():
+                if not re.search(rf"^\s+{name}:", "\n".join(lines), re.MULTILINE):
+                    out.append(f"  {name}: {value}")
+            out.extend(lines[1:])
+            continue
         if key == "packages":
             out.append("packages:")
             for f in _package_files(lines, optional):

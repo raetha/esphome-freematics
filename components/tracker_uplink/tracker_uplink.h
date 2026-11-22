@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 
 #include <memory>
@@ -26,7 +27,7 @@
 #include "tracker.h"
 #include "webhook.h"
 
-namespace esphome::traccar_uplink {
+namespace esphome::tracker_uplink {
 
 using ::trackcodec::Decision;
 using ::trackcodec::Record;
@@ -38,8 +39,48 @@ using Store = ::trackcodec::NoStore;
 using ::trackcodec::Tracker;
 using ::trackcodec::TrackerConfig;
 
-class TraccarUplink final : public Component {
+/// Decides what to report from the GNSS fixes (tracker.h) and sends it: to
+/// Traccar as GH3000 records over UDP (or its Freematics text protocol), or to
+/// Home Assistant's Freematics integration as compact batches posted to a
+/// webhook. Records stay queued, in memory or on an SD card file, until the
+/// server acknowledges them. Several can run side by side (Traccar and Home
+/// Assistant), each with its own queue.
+class TrackerUplink final : public Component {
  public:
+  TrackerUplink() {
+    if (count_ < MAX_UPLINKS)
+      instances_[count_++] = this;
+  }
+
+  /// Whether any uplink is on a trip.
+  static bool any_moving() {
+    for (size_t i = 0; i < count_; i++) {
+      if (instances_[i]->is_moving())
+        return true;
+    }
+    return false;
+  }
+  /// Records waiting in all uplinks together.
+  static size_t total_queued() {
+    size_t n = 0;
+    for (size_t i = 0; i < count_; i++)
+      n += instances_[i]->queue_size();
+    return n;
+  }
+  /// Whether every uplink has delivered something since the start.
+  static bool all_sent() {
+    for (size_t i = 0; i < count_; i++) {
+      if (instances_[i]->records_sent() == 0)
+        return false;
+    }
+    return count_ > 0;
+  }
+  /// Send what's queued in every uplink at the next chance.
+  static void flush_all() {
+    for (size_t i = 0; i < count_; i++)
+      instances_[i]->flush();
+  }
+
   void setup() override;
   void loop() override;
   void dump_config() override;
@@ -67,7 +108,7 @@ class TraccarUplink final : public Component {
   void set_time(time::RealTimeClock *t) { this->time_ = t; }
 #endif
 #ifdef USE_FILE_QUEUE
-  /// Keep every record in this queue (an SD card file) until Traccar
+  /// Keep every record in this queue (an SD card file) until the server
   /// acknowledges it; memory then holds only the oldest max_queue of them.
   void set_file_queue(file_queue::FileQueue *q) { this->store_ = q; }
 #endif
@@ -147,16 +188,20 @@ class TraccarUplink final : public Component {
   uint32_t last_unix_millis_{0};
 
   uint32_t records_sent_{0};
-  uint32_t last_ack_at_{0};  // loop time of Traccar's last answer; 0: none yet
+  uint32_t last_ack_at_{0};  // loop time of the server's last answer; 0: none yet
   uint32_t bytes_sent_{0};
 
   Trigger<> motion_start_trigger_;
   Trigger<> motion_stop_trigger_;
+
+  static constexpr size_t MAX_UPLINKS = 4;
+  static inline std::array<TrackerUplink *, MAX_UPLINKS> instances_{};  // NOLINT
+  static inline size_t count_{0};                                       // NOLINT
 };
 
-template<typename... Ts> class FlushAction : public Action<Ts...>, public Parented<TraccarUplink> {
+template<typename... Ts> class FlushAction : public Action<Ts...>, public Parented<TrackerUplink> {
  public:
   void play(const Ts &...x) override { this->parent_->flush(); }
 };
 
-}  // namespace esphome::traccar_uplink
+}  // namespace esphome::tracker_uplink

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that a Traccar server answers the dongle's packets, from any computer.
 
-Sends one Teltonika GH3000 packet over UDP, as the traccar_uplink component
+Sends one Teltonika GH3000 packet over UDP, as the tracker_uplink component
 does, holding a single time-only record (no position, so nothing shows on the
 map), and prints Traccar's acknowledgement:
 

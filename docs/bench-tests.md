@@ -16,7 +16,7 @@ ota:
 external_components:
   - source: github://raetha/esphome-freematics@dev
     refresh: 0s
-    components: [freematics_link, traccar_uplink, sd_card, file_queue, file_logger]
+    components: [freematics_link, tracker_uplink, sd_card, file_queue, file_logger]
 ```
 
 Under `packages: freematics: files:`, add these lines (commented out for now; later tests switch them on):
