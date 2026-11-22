@@ -34,18 +34,29 @@ Both use `packages/wifi-first.yaml`: on a known Wi-Fi network LTE is switched of
 
 ## Traccar
 
-Each GNSS fix goes through a tracking filter in the `tracker_uplink` component, and only some become records:
+The board package's trip tracker (`trip_tracker`) decides once per car when a trip starts and stops, so Traccar and Home Assistant always agree; each uplink (`tracker_uplink`) then decides which fixes become its records:
 
-- **Moving** (speed at or above `traccar_moving_speed`, 6 km/h): a record every `traccar_moving_interval` (10 s), plus one early when the course turns by `traccar_turn_angle` (30°), so corners stay sharp without recording every second.
-- **Trip start**: once `traccar_start_fixes` (3) fixes in a row are fast and the car is `traccar_start_distance` (50 m) from where it was parked, with battery voltage and a motion flag. A still receiver with a weak fix (indoors, few satellites) reports a fast fix now and then and drifts tens of metres, which would otherwise start trips while parked and keep the device from sleeping. And only within `traccar_start_motion` (5 minutes) of the motion sensor feeling the car move (getting in, a door, the road; `motion_mg`, 100 mg between samples at 50 Hz), so a garage, a house or a desk never starts one however far the fix wanders, whether the dongle is powered from the OBD port or over USB. Without a supported motion sensor (the Model B's ICM-42627 is), the GPS rule decides alone. The stock telelogger avoids the same drift differently: it switches GPS off 3 minutes after it last saw 2 km/h or a jolt, and wakes only on a 0.4 g jolt, so a parked car sends no positions at all; awake, it sends every fix, and Traccar makes trips from their speed.
-- **Trip stop**: after `traccar_stop_delay` (180 s, the telelogger's) below moving speed; sent at once, with battery voltage.
-- **Parked**: a heartbeat every `traccar_heartbeat_interval` (15 min, the telelogger's), with battery voltage; `0s` turns it off. Without a fix it carries no position and Traccar keeps the last one.
+- **Moving** (speed at or above `trip_moving_speed`, 6 km/h): a record every `traccar_moving_interval` (10 s), plus one early when the course turns by `traccar_turn_angle` (30°), so corners stay sharp without recording every second.
+- **Trip start**: once `trip_start_fixes` (3) fixes in a row are fast and the car is `trip_start_distance` (50 m) from where it was parked, with battery voltage, temperature, cellular signal and a motion flag. A still receiver with a weak fix (indoors, few satellites) reports a fast fix now and then and drifts tens of metres, which would otherwise start trips while parked and keep the device from sleeping. And only within `trip_start_motion` (5 minutes) of the motion sensor feeling the car move (getting in, a door, the road; `motion_threshold`, 100 mg between samples at 100 Hz), so a garage, a house or a desk never starts one however far the fix wanders, whether the dongle is powered from the OBD port or over USB. Without a supported motion sensor (the Model B's ICM-42627 is), the GPS rule decides alone. The stock telelogger avoids the same drift differently: it switches GPS off 3 minutes after it last saw 2 km/h or a jolt, and wakes only on a 0.4 g jolt, so a parked car sends no positions at all; awake, it sends every fix, and Traccar makes trips from their speed.
+- **Trip stop**: after `trip_stop_delay` (180 s, the telelogger's) below moving speed; sent at once, with the same extras as a start.
+- **Parked**: a heartbeat every `traccar_heartbeat_interval` (15 min, the telelogger's), with the same extras; `0s` turns it off. Without a fix it carries no position and Traccar keeps the last one.
+- **Impact**: when the motion sensor measures more than `impact_threshold` (4 g beyond gravity; hard braking is under 1 g), a record with the impact's peak goes out at once, wherever the car is in its trip.
+
+The extras are a few bytes on records that are rare anyway (starts, stops, heartbeats). Traccar's GH3000 decoder names only battery and motion; the rest arrive as `io` attributes, with Traccar's unsigned values:
+
+| Attribute | Value |
+| --- | --- |
+| `io72` | The dongle's temperature in °C (its motion sensor's chip); above 127 is below zero: subtract 256 |
+| `io205` | The cellular signal as −dBm (85 is −85 dBm); absent on Wi-Fi |
+| `io247` | An impact's peak in tenths of a g (64 is 6.4 g) |
+
+A Traccar computed attribute can turn them into named ones, or raise an alarm on `io247` (Settings → Computed attributes: `io247 ? "accident" : null` for `alarm`). With `traccar_protocol: freematics`, Traccar names the temperature and signal itself (`deviceTemp`, `rssi`); impacts aren't sent in that protocol.
 
 Records wait in memory and go out together every `traccar_send_interval` (60 s), sooner on a stop, a heartbeat, or a full batch of 40. Traccar answers each packet with the number of records it took; until it does, the records stay queued and are sent again (after 15 s; after three tries the server's name is looked up again). A lost answer can mean Traccar stores a fix twice.
 
 Why Teltonika's GH3000 format: it's the densest location record Traccar decodes (4-byte time, 8 bytes of position, a byte each for course, speed and satellites), and Traccar acknowledges UDP packets, which the Freematics protocol it uses for the stock firmware doesn't do for positions. The Freematics protocol is text, about 60 bytes per fix, and unacknowledged UDP is how data went missing. In Traccar the device is the same: keep its identifier as `traccar_device_id`; it just arrives on port 5027 (Teltonika) instead of 5170 (Freematics). Open UDP 5027 on the server if it isn't.
 
-All of these are substitutions in `packages/uplink-traccar.yaml`; a device config overrides any of them.
+The `traccar_*` settings are substitutions in `packages/uplink-traccar.yaml`, the `trip_*`, `motion_threshold` and `impact_threshold` ones in the board package; a device config overrides any of them.
 
 ### Traccar server settings
 
@@ -66,7 +77,9 @@ The Traccar configuration's tracking, sent to Home Assistant instead (or as well
 
 Each batch is one HTTPS request: the records in a compact binary form (`components/tracker_uplink/compact.h`: the first record in full, then only what changed, about 11 bytes a record while driving against GH3000's 19, sent as base64 text, about 15, because Home Assistant Cloud relays a webhook's body as a UTF-8 string that binary wouldn't survive), posted every `ha_send_interval` (2 minutes) and at once on a trip start, stop or heartbeat. Home Assistant's answer acknowledges the batch; until then the records stay queued. Most of the cost is the request itself (TCP, TLS and HTTP headers, roughly 1 to 2 KB): the client keeps the connection open between batches while the server allows, and resumes the TLS session with a ticket when it doesn't. The posting runs in a task of its own, so the main loop never waits for the network. The webhook URL is the only key, so it never appears in the logs.
 
-Home Assistant can't store states with past timestamps: records sent late (after a coverage gap) update the device to the newest one, and their trip starts and stops still arrive as events with their real times, but there's no track history as in Traccar. For history and trips, run both.
+The same extras ride along (temperature, cellular signal, an impact's peak), in a block of tagged values a reader skips when it doesn't know them, so newer dongles keep working with older versions of the integration. Before sleeping, the dongle adds when it will report again (its next heartbeat wake), so the integration's Reporting sensor knows a quiet night from a dongle that's gone.
+
+Home Assistant can't store states with past timestamps: records sent late (after a coverage gap) update the device to the newest one, and their trip starts and stops still arrive as events with their real times, but there's no track history as in Traccar. The integration adds up each trip from its points (distance, duration, top and average speed) and reports it with the trip's stop. For a track history, run both.
 
 ## Home Assistant
 

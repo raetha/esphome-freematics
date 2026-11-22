@@ -11,8 +11,15 @@
 //             the first: from 0), speed (km/h), course / 2, satellites, HDOP x 10
 //             (each a byte), and with ALTITUDE a zigzag varint altitude change (m)
 //           with BATTERY: battery voltage (0.1 V, a byte)
+//           with EXTRAS: a count, then that many extras, each a tag byte and
+//             its value: the tag's low 6 bits say what it is, its top 2 bits
+//             the value's size (0: 1 byte, 1: 2 bytes LE, 2: 4 bytes LE, 3: a
+//             length byte, then that many bytes), so a reader skips the ones it
+//             doesn't know. Extras so far: 1 temperature (int8, deg C),
+//             2 cellular signal (int8, dBm), 3 impact (uint8, peak in 0.1 g),
+//             4 next report within (uint16, minutes: the dongle goes to sleep)
 //   flags:  bits 0-1 the kind (fix, trip start, trip stop, heartbeat),
-//           0x04 POSITION, 0x08 ALTITUDE, 0x10 BATTERY; the rest 0
+//           0x04 POSITION, 0x08 ALTITUDE, 0x10 BATTERY, 0x20 EXTRAS; the rest 0
 //
 // On the wire the batch is base64 text: Home Assistant Cloud relays a webhook's
 // body as a UTF-8 string, which binary doesn't survive (a third more bytes,
@@ -38,6 +45,12 @@ static constexpr size_t COMPACT_HEADER_SIZE = 7;
 static constexpr uint8_t COMPACT_POSITION = 0x04;
 static constexpr uint8_t COMPACT_ALTITUDE = 0x08;
 static constexpr uint8_t COMPACT_BATTERY = 0x10;
+static constexpr uint8_t COMPACT_EXTRAS = 0x20;
+// Extra tags: the id, with the value's size in the top two bits.
+static constexpr uint8_t EXTRA_TEMPERATURE = 0x01;  // 1 byte
+static constexpr uint8_t EXTRA_SIGNAL = 0x02;       // 1 byte
+static constexpr uint8_t EXTRA_IMPACT = 0x03;       // 1 byte
+static constexpr uint8_t EXTRA_NEXT_REPORT = 0x44;  // 2 bytes (id 4)
 
 // Record kinds (Record::kind holds the tracker's Decision; these are the wire values).
 enum CompactKind : uint8_t { COMPACT_FIX = 0, COMPACT_START = 1, COMPACT_STOP = 2, COMPACT_HEARTBEAT = 3 };
@@ -130,6 +143,36 @@ class CompactEncoder {
     if (r.battery_mv > 0) {
       flags |= COMPACT_BATTERY;
       tmp[n++] = static_cast<uint8_t>(std::min<uint32_t>(255, (r.battery_mv + 50) / 100));
+    }
+    size_t count_at = n;
+    uint8_t extras = 0;
+    n++;  // the count, filled in below
+    if (r.has_temperature) {
+      tmp[n++] = EXTRA_TEMPERATURE;
+      tmp[n++] = static_cast<uint8_t>(r.temperature_c);
+      extras++;
+    }
+    if (r.signal_dbm < 0) {
+      tmp[n++] = EXTRA_SIGNAL;
+      tmp[n++] = static_cast<uint8_t>(r.signal_dbm);
+      extras++;
+    }
+    if (r.impact_dg > 0) {
+      tmp[n++] = EXTRA_IMPACT;
+      tmp[n++] = r.impact_dg;
+      extras++;
+    }
+    if (r.next_report_min > 0) {
+      tmp[n++] = EXTRA_NEXT_REPORT;
+      tmp[n++] = static_cast<uint8_t>(r.next_report_min);
+      tmp[n++] = static_cast<uint8_t>(r.next_report_min >> 8);
+      extras++;
+    }
+    if (extras > 0) {
+      flags |= COMPACT_EXTRAS;
+      tmp[count_at] = extras;
+    } else {
+      n--;  // no extras: no count
     }
     tmp[0] = flags;
     if (static_cast<size_t>(this->end_ - this->p_) < n)

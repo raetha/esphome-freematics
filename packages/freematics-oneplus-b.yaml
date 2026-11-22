@@ -1,10 +1,14 @@
 # Freematics ONE+ Model B board package for ESPHome 2026.11+
 #
 # What every dongle has, whatever it reports to: pins, the cellular modem and
-# its power key, the co-processor link with the internal GNSS, battery voltage.
-# Each GNSS fix lands in the gnss_* globals and runs the on_gnss_fix script,
-# which an uplink package defines (packages/uplink-*.yaml). See the examples/
-# configs, docs/hardware.md (pins and sources) and docs/configurations.md.
+# its power key, the co-processor link with the internal GNSS, the motion
+# sensor, battery voltage, and the trip tracker (trips), which decides when a
+# trip starts and stops for every uplink package (packages/uplink-*.yaml). See
+# the examples/ configs, docs/hardware.md (pins and sources) and
+# docs/configurations.md.
+#
+# The device config loads the components (external_components: components:
+# [freematics_link, icm426xx, trip_tracker, ...]).
 #
 # Substitutions a device config must set: name, friendly_name, cell_apn.
 
@@ -25,7 +29,14 @@ substitutions:
   sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
   coproc_log_level: DEBUG       # the co-processor link's log; VERBOSE also logs every GPS reply (with logger_level: VERBOSE)
   logger_level: DEBUG           # the device's log: DEBUG, VERBOSE, INFO, WARN...
-  motion_mg: "100"              # mg: a change this big between motion sensor samples counts as the car being moved (a door, getting in, the road)
+  motion_threshold: 100mg       # a change this big between motion sensor samples (10 ms apart) counts as the car being moved (a door, getting in, the road)
+  impact_threshold: 4g          # acceleration beyond gravity that counts as an impact, reported at once (0g: none); hard braking is under 1 g
+  gnss_restart: 10min           # no GNSS fix this long: the GNSS is switched off and on again, as the stock firmware does (0s: never)
+  trip_moving_speed: "6"        # km/h: at or above, the car is moving
+  trip_start_fixes: "3"         # a trip starts after this many fast fixes in a row (2 s apart)...
+  trip_start_distance: 50m      # ...this far from where the car was parked (GPS drift doesn't start trips)
+  trip_start_motion: 300s       # a trip starts only this soon after the motion sensor felt the car move (getting in, driving); 0s: GPS alone
+  trip_stop_delay: 180s         # below moving speed this long: the trip is over (telelogger: 180 s)
 
 esphome:
   name: ${name}
@@ -34,19 +45,6 @@ esphome:
     name: raetha.esphome-freematics
     version: "0.1.0"
   on_boot:
-    # Find the motion sensor and have it flag movement (read every second).
-    - priority: -200
-      then:
-        - lambda: |-
-            uint8_t reg = 0x75, who = 0;
-            if (id(imu_bus)->write_readv(0x68, &reg, 1, &who, 1) != i2c::ERROR_OK)
-              ESP_LOGW("motion", "No motion sensor at 0x68: trips start on GPS alone");
-            else if (who == 0x20)
-              ESP_LOGI("motion", "Motion sensor: ICM-42627");
-            else
-              ESP_LOGW("motion", "Motion sensor with ID 0x%02X isn't supported yet: trips start on GPS alone", who);
-            id(motion_sensor) = who == 0x20;
-        - script.execute: { id: motion_arm, mg: !lambda "return ${motion_mg};" }
     - priority: -100
       then:
         - script.execute: modem_power_on
@@ -164,91 +162,21 @@ i2c:
   sda: GPIO21
   scl: GPIO22
   scan: false
+  frequency: 400kHz                  # 100 accelerometer samples a second come over it
 
-interval:
-  # The motion sensor latches a flag when it's moved; reading clears it.
-  - interval: 1s
-    then:
-      - lambda: |-
-          if (!id(motion_sensor) || !id(motion_settled))
-            return;
-          uint8_t reg = 0x37, status = 0;  // INT_STATUS2: wake-on-motion flags
-          if (id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1) != i2c::ERROR_OK || (status & 0x07) == 0)
-            return;
-          uint32_t now = millis();
-          if (id(motion_ms) == 0 || now - id(motion_ms) >= 60000)
-            ESP_LOGD("motion", "Moved");
-          id(motion_ms) = now | 1;
+icm426xx:
+  id: motion_sensor
+  i2c_id: imu_bus
+  motion_threshold: ${motion_threshold}
+  impact_threshold: ${impact_threshold}
+
+binary_sensor:
+  - platform: icm426xx
+    motion:
+      id: car_motion                 # on while the car is being moved, and 10 s after
+      internal: true
 
 script:
-  # Runs on each GNSS fix (the gnss_* globals hold it); each uplink package adds
-  # its own steps with "- id: !extend on_gnss_fix", so several can share it.
-  - id: on_gnss_fix
-    then:
-      - lambda: ""
-
-  # The ICM-42627's wake-on-motion (TDK's ICM-426xx register map): the
-  # accelerometer alone in low-power mode at 50 Hz, a flag latched in
-  # INT_STATUS2 when any axis changes by more than mg between two samples.
-  # Awake, a flag means the car is being moved (trips start only then);
-  # packages/standby.yaml sets its own threshold before sleeping.
-  - id: motion_arm
-    mode: queued
-    parameters:
-      mg: int
-    then:
-      - lambda: |-
-          id(motion_arm_ok) = false;
-          id(motion_settled) = false;
-          if (!id(motion_sensor))
-            return;
-          auto put = [](uint8_t r, uint8_t v) {
-            uint8_t b[2] = {r, v};
-            return id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
-          };
-          if (mg <= 0) {                       // off: no flags, accelerometer off
-            put(0x76, 0x00);
-            put(0x57, 0x00);                   // SMD_CONFIG: wake-on-motion off
-            put(0x4E, 0x00);                   // PWR_MGMT0: accelerometer off
-            return;
-          }
-          const uint8_t threshold = std::min(255, mg * 256 / 1000);  // 1/256 g steps
-          bool ok = put(0x76, 0x00);           // register bank 0
-          ok &= put(0x50, 0x69);               // ACCEL_CONFIG0: +-2 g, 50 Hz
-          ok &= put(0x4E, 0x02);               // PWR_MGMT0: accelerometer low power, gyro off
-          delay(2);
-          ok &= put(0x76, 0x04);               // bank 4: the thresholds
-          ok &= put(0x4A, threshold);          // ACCEL_WOM_X_THR
-          ok &= put(0x4B, threshold);          // ACCEL_WOM_Y_THR
-          ok &= put(0x4C, threshold);          // ACCEL_WOM_Z_THR
-          ok &= put(0x76, 0x00);
-          delay(2);
-          ok &= put(0x66, 0x07);               // INT_SOURCE1: wake-on-motion on all axes
-          id(motion_arm_ok) = ok;
-          if (!ok)
-            ESP_LOGW("motion", "Couldn't set the motion sensor up");
-      - delay: 50ms                            # before switching wake-on-motion on
-      - lambda: |-
-          if (!id(motion_sensor) || mg <= 0 || !id(motion_arm_ok))
-            return;
-          uint8_t b[2] = {0x57, 0x05};         // SMD_CONFIG: wake-on-motion, compared with the previous sample
-          bool ok = id(imu_bus)->write(0x68, b, 2) == i2c::ERROR_OK;
-          if (ok)
-            ESP_LOGD("motion", "Motion sensor set to %d mg", mg);
-          else
-            ESP_LOGW("motion", "Couldn't set the motion sensor up");
-          id(motion_arm_ok) = ok;
-      # Starting from off (a power-on), the first comparisons are against no
-      # earlier sample and set a flag: let a few samples pass, then clear it,
-      # so a dongle just plugged in doesn't count as moved.
-      - delay: 200ms
-      - lambda: |-
-          if (!id(motion_arm_ok))
-            return;
-          uint8_t reg = 0x37, status;
-          id(imu_bus)->write_readv(0x68, &reg, 1, &status, 1);
-          id(motion_settled) = true;
-  # A beep of ms milliseconds; beeps asked for together play one after another.
   # A short beep when Wi-Fi or cellular comes up, at most once in 10 minutes
   # (a network that keeps dropping the device would beep every minute).
   - id: network_beep
@@ -261,6 +189,7 @@ script:
           then:
             - lambda: id(last_network_beep) = millis() | 1;
             - script.execute: { id: beep, ms: 50 }
+  # A beep of ms milliseconds; beeps asked for together play one after another.
   - id: beep
     mode: queued
     parameters:
@@ -319,19 +248,8 @@ script:
                       then:
                         - modem.enable:
                   - delay: ${modem_pwrkey_wait}
+
 globals:
-  - id: motion_sensor            # a supported motion sensor answered
-    type: bool
-    initial_value: "false"
-  - id: motion_settled           # armed and past its first samples: its flags mean movement
-    type: bool
-    initial_value: "false"
-  - id: motion_arm_ok            # the motion sensor took its settings
-    type: bool
-    initial_value: "false"
-  - id: motion_ms                # millis() when the motion sensor last flagged movement; 0: not since start
-    type: uint32_t
-    initial_value: "0"
   - id: modem_syncs              # module answers since the last connection
     type: uint8_t
     initial_value: "0"
@@ -353,37 +271,6 @@ globals:
   - id: modem_synced
     type: bool
     initial_value: "false"
-  # The latest GNSS fix, filled by freematics_link's on_fix (below)
-  - id: gnss_date        # ddmmyy, UTC
-    type: uint32_t
-    initial_value: "0"
-  - id: gnss_time        # hhmmsscc, UTC
-    type: uint32_t
-    initial_value: "0"
-  - id: gnss_lat
-    type: float
-    initial_value: "0"
-  - id: gnss_lon
-    type: float
-    initial_value: "0"
-  - id: gnss_fix_ms                # millis() of the last good fix; 0: none yet
-    type: uint32_t
-    initial_value: "0"
-  - id: gnss_alt                   # metres
-    type: float
-    initial_value: "NAN"
-  - id: gnss_kmh
-    type: float
-    initial_value: "0"
-  - id: gnss_course
-    type: float
-    initial_value: "0"
-  - id: gnss_sats
-    type: uint8_t
-    initial_value: "0"
-  - id: gnss_hdop
-    type: uint8_t
-    initial_value: "0"
 
 sensor:
   - platform: adc
@@ -397,6 +284,34 @@ sensor:
     device_class: voltage
     filters:
       - multiply: 11.0   # 100k/10k divider; calibrate against a meter
+  - platform: icm426xx
+    temperature:
+      id: dongle_temperature           # the motion sensor's chip, inside the dongle
+      internal: true
+    impact:
+      id: impact_peak                  # each impact's peak, beyond gravity
+      internal: true
+  - platform: modem
+    rssi:
+      id: cell_signal                  # dBm while cellular is on (AT+CSQ: answered by the module, no data)
+      internal: true
+
+# Trips: decided once here, from the GNSS and the motion sensor, for every
+# uplink. The battery voltage, temperature and signal ride along with trip
+# starts, stops and heartbeats; an impact is reported at once.
+trip_tracker:
+  id: trips
+  moving_speed: ${trip_moving_speed}
+  start_fixes: ${trip_start_fixes}
+  start_distance: ${trip_start_distance}
+  start_motion: ${trip_start_motion}
+  stop_delay: ${trip_stop_delay}
+  motion: car_motion
+  battery_voltage: battery_voltage
+  temperature: dongle_temperature
+  signal: cell_signal
+  impact: impact_peak
+  time_id: sntp_time
 
 # ---------- Co-processor link (STM32F103: OBD and the internal GNSS) ----------
 # freematics_link sends only ATI, ATRV, ATGPSON, ATGPS, ATGPSOFF and ATLP, all answered by the
@@ -418,16 +333,6 @@ freematics_link:
     ignore_strapping_warning: true
   gnss_interval: ${gnss_poll_interval}
   battery_interval: 0s               # the ADC reads battery voltage; ATRV is the alternative
+  gnss_restart: ${gnss_restart}
   on_fix:
-    - lambda: |-
-        id(gnss_date) = fix.date;
-        id(gnss_time) = fix.time;
-        id(gnss_lat) = fix.latitude;
-        id(gnss_lon) = fix.longitude;
-        id(gnss_fix_ms) = millis();
-        id(gnss_alt) = fix.altitude_m;
-        id(gnss_kmh) = std::isnan(fix.speed_kmh) ? 0 : fix.speed_kmh;
-        id(gnss_course) = std::isnan(fix.course_deg) ? 0 : fix.course_deg;
-        id(gnss_sats) = fix.satellites;
-        id(gnss_hdop) = fix.hdop;
-        id(on_gnss_fix).execute();
+    - lambda: id(trips).add_fix(fix);

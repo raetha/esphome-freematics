@@ -76,8 +76,10 @@ void FreematicsLink::dump_config() {
   }
   ESP_LOGCONFIG(TAG,
                 "  Bytes received since boot: %" PRIu32 "\n"
-                "  GNSS replies: %" PRIu32 ", missed in a row: %u",
-                this->rx_total_, this->gnss_replies_, this->gnss_misses_);
+                "  GNSS replies: %" PRIu32 ", missed in a row: %u\n"
+                "  GNSS restarted after %" PRIu32 " min without a fix: %u times",
+                this->rx_total_, this->gnss_replies_, this->gnss_misses_, this->gnss_restart_ / 60000,
+                this->gnss_restarts_);
   if (this->fix_now_) {
     ESP_LOGCONFIG(TAG, "  GNSS fix: %u satellites, %.5f, %.5f", this->last_fix_.satellites, this->last_fix_.latitude,
                   this->last_fix_.longitude);
@@ -156,7 +158,12 @@ void FreematicsLink::loop() {
       return;
     case State::GNSS_STARTING:
       this->send_(Command::GNSS_ON);
+      this->gnss_since_ = now;
       this->state_ = State::RUNNING;
+      return;
+    case State::GNSS_RESTARTING:
+      this->send_(Command::GNSS_OFF);
+      this->state_ = State::GNSS_STARTING;
       return;
     case State::RUNNING:
       break;
@@ -172,6 +179,14 @@ void FreematicsLink::loop() {
       return;
   }
 
+  if (this->gnss_interval_ != 0 && this->gnss_restart_ != 0 && now - this->gnss_since_ >= this->gnss_restart_) {
+    // Indoors this happens every gnss_restart without harm; outdoors it
+    // recovers a receiver that stopped producing fixes.
+    this->gnss_restarts_++;
+    ESP_LOGW(TAG, "No GNSS fix for %" PRIu32 " min: switching the GNSS off and on again", this->gnss_restart_ / 60000);
+    this->state_ = State::GNSS_RESTARTING;
+    return;
+  }
   if (this->gnss_interval_ != 0 && now - this->last_gnss_ >= this->gnss_interval_) {
     this->last_gnss_ = now;
     this->send_(Command::GNSS_READ);
@@ -256,6 +271,7 @@ void FreematicsLink::handle_fix_(const char *reply) {
     return;
   this->has_fix_ = true;
   this->last_fix_ = fix;
+  this->gnss_since_ = now_ms();
 #ifdef USE_SENSOR
   if (this->latitude_ != nullptr)
     this->latitude_->publish_state(fix.latitude);

@@ -98,8 +98,9 @@ interval:
     then:
       - lambda: |-
           uint32_t now = millis();
-          bool fresh = id(gnss_fix_ms) != 0 && now - id(gnss_fix_ms) < 30000;
-          if (fresh && id(gnss_kmh) >= ${wifi_pause_speed}) {
+          uint32_t fix_ms = id(trips).last_fix_ms();
+          bool fresh = fix_ms != 0 && now - fix_ms < 30000;
+          if (fresh && id(trips).last_fix().speed_kmh >= ${wifi_pause_speed}) {
             id(wifi_moving_ms) = now;
             id(wifi_gave_up) = false;  // a new place: search there afresh
             id(wifi_dropped) = false;

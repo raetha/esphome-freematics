@@ -70,6 +70,11 @@ inline size_t encode_freematics(char *out, size_t size, const char *device_id, c
       return 0;
     if (r.battery_mv != 0 && !detail::append(out, size, &len, ",24:%u", static_cast<unsigned>(r.battery_mv / 10)))
       return 0;
+    // Traccar's Freematics decoder: 81 signal (rssi), 82 device temperature (tenths of a degree)
+    if (r.signal_dbm < 0 && !detail::append(out, size, &len, ",81:%d", static_cast<int>(r.signal_dbm)))
+      return 0;
+    if (r.has_temperature && !detail::append(out, size, &len, ",82:%d", static_cast<int>(r.temperature_c) * 10))
+      return 0;
   }
   return detail::finish(out, size, &len) ? len : 0;
 }

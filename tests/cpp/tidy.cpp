@@ -5,6 +5,8 @@
 #include "record_queue.h"
 #include "teltonika.h"
 #include "tracker.h"
+#include "trip.h"
+#include "motion.h"
 #include "link_parse.h"
 #include "backlog.h"
 #include "ring_file.h"

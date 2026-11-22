@@ -37,6 +37,9 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   void set_reset_pin(GPIOPin *pin) { this->reset_pin_ = pin; }
   void set_gnss_interval(uint32_t ms) { this->gnss_interval_ = ms; }
   void set_battery_interval(uint32_t ms) { this->battery_interval_ = ms; }
+  /// Switch the GNSS off and on again after this long without a fix (0: never),
+  /// as the stock firmware does for a receiver that stopped producing fixes.
+  void set_gnss_restart(uint32_t ms) { this->gnss_restart_ = ms; }
 #ifdef USE_SENSOR
   void set_latitude_sensor(sensor::Sensor *s) { this->latitude_ = s; }
   void set_longitude_sensor(sensor::Sensor *s) { this->longitude_ = s; }
@@ -78,6 +81,9 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   GPIOPin *reset_pin_{nullptr};
   uint32_t gnss_interval_{2000};
   uint32_t battery_interval_{60000};
+  uint32_t gnss_restart_{600000};
+  uint32_t gnss_since_{0};  // loop time of the last good fix, or of switching the GNSS on
+  uint16_t gnss_restarts_{0};
 #ifdef USE_SENSOR
   sensor::Sensor *latitude_{nullptr};
   sensor::Sensor *longitude_{nullptr};
@@ -100,6 +106,7 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
     IDENTIFYING,
     GNSS_STARTING,
     RUNNING,
+    GNSS_RESTARTING,
     STANDBY_GNSS_OFF,
     STANDBY_LOW_POWER,
     STANDBY

@@ -7,7 +7,9 @@
 #include <esp_crt_bundle.h>
 
 #include "compact.h"
+#include "tracker.h"
 
+#include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
 namespace esphome::tracker_uplink {
@@ -83,6 +85,72 @@ void WebhookPoster::task_(void *arg) {
     self->status_.store(self->perform_());
     self->state_.store(DONE);
   }
+}
+
+bool WebhookTransport::setup(size_t batch_max) {
+  // A new start begins at a random batch number, so Home Assistant never
+  // mistakes the first batches after a restart for ones it has seen.
+  this->sequence_ = static_cast<uint16_t>(random_uint32());
+  if (!this->poster_.start(this->url_, sizeof(this->buf_))) {
+    ESP_LOGE(TAG, "Could not start the webhook client");
+    return false;
+  }
+  return true;
+}
+
+void WebhookTransport::dump_config() {
+  // The URL itself stays out of the log: the webhook ID in it is the only key.
+  ESP_LOGCONFIG(TAG, "  Protocol: compact batches to a Home Assistant webhook over HTTPS");
+}
+
+static ::trackcodec::CompactKind compact_kind(uint8_t decision) {
+  switch (static_cast<::trackcodec::Decision>(decision)) {
+    case ::trackcodec::Decision::START:
+      return ::trackcodec::COMPACT_START;
+    case ::trackcodec::Decision::STOP:
+      return ::trackcodec::COMPACT_STOP;
+    case ::trackcodec::Decision::HEARTBEAT:
+      return ::trackcodec::COMPACT_HEARTBEAT;
+    default:
+      return ::trackcodec::COMPACT_FIX;
+  }
+}
+
+size_t WebhookTransport::send(const RecordQueue &records, size_t max) {
+  ::trackcodec::CompactEncoder enc;
+  enc.begin(this->buf_, sizeof(this->buf_), this->sequence_, records.at(0).time);
+  size_t count = 0;
+  while (count < records.size() && count < max && enc.add(records.at(count), compact_kind(records.at(count).kind)))
+    count++;
+  if (count == 0 || !this->poster_.post(this->buf_, enc.size()))
+    return 0;
+  this->in_flight_ = count;
+  const size_t sent = ::trackcodec::base64_size(enc.size());
+  this->bytes_sent_ += sent;
+  ESP_LOGD(TAG, "Posting %u records in %u bytes", (unsigned) count, (unsigned) sent);
+  return count;
+}
+
+SendResult WebhookTransport::poll(uint32_t now) {
+  int status = this->poster_.take_result();
+  if (status == 0)
+    return SendResult::PENDING;
+  size_t n = this->in_flight_;
+  this->in_flight_ = 0;
+  this->sequence_++;
+  if (status >= 200 && status < 300) {
+    ESP_LOGD(TAG, "Home Assistant took %u records", (unsigned) n);
+    return SendResult::ACKED;
+  }
+  if (status < 0) {
+    ESP_LOGW(TAG, "No answer from Home Assistant (%s); %u records kept", esp_err_to_name(this->poster_.last_error()),
+             (unsigned) n);
+  } else if (status == 404 || status == 405) {
+    ESP_LOGW(TAG, "Home Assistant doesn't know this webhook (HTTP %d): check the URL and the integration", status);
+  } else {
+    ESP_LOGW(TAG, "Home Assistant answered HTTP %d; %u records kept", status, (unsigned) n);
+  }
+  return SendResult::FAILED;
 }
 
 }  // namespace esphome::tracker_uplink

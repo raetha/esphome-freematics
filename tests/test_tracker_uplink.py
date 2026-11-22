@@ -646,3 +646,47 @@ def test_base64_matches_python(cli, data):
     out = cli(f"base64 {data.hex() or '-'}\n")
     expected = base64.b64encode(data).decode()
     assert (out[0] if out else "") == expected
+
+
+def test_extras_in_every_format(cli):
+    """Temperature, signal, impact and the next report ride along where each
+    format has room for them, and old readers skip what they don't know."""
+    from compact import decode as decode_compact
+
+    t = 1_700_000_000
+    extras = "extras 1 -7 -85 43 360\n"
+    (hex_packet,) = cli(extras + f"packet 1 1 car1 1\n{t} 1 43.8 -72.3 0 0 9 12600 0\n")
+    (rec,) = decode(bytes.fromhex(hex_packet))["records"]
+    # Traccar keeps them as io attributes: 249 is -7 deg C, 85 is -85 dBm, 43 is 4.3 g
+    assert rec["io72"] == 249 and rec["io205"] == 85 and rec["io247"] == 43
+    assert rec["io240"] == 0 and rec["io67"] == 12600
+
+    out = cli(extras + f"freematics car1 1024 1\n{t} 1 43.8 -72.3 0 0 9 12600 0\n")
+    _, (position,) = decode_freematics(out[0])
+    assert position[0x81] == "-85" and position[0x82] == "-70"
+
+    lines = extras + f"compact 1024 7 {t} 1\n3 {t} 1 43.8 -72.3 0 0 9 9 12600\n"
+    out = cli(lines)
+    _, (got,) = decode_compact(bytes.fromhex(out[1]))
+    assert (got.temperature, got.signal, got.impact_g, got.next_report_min) == (
+        -7,
+        -85,
+        4.3,
+        360,
+    )
+    assert got.battery_v == 12.6 and got.kind == "heartbeat"
+
+    # Without extras nothing is added.
+    out = cli(f"compact 1024 7 {t} 1\n3 {t} 0 0 0 0 0 0 0 12600\n")
+    assert len(bytes.fromhex(out[1])) == 7 + 3
+
+
+def test_compact_skips_unknown_extras():
+    from compact import decode as decode_compact
+
+    header = bytes([1, 0, 0, 0, 0, 0, 0])
+    # A heartbeat with extras: an unknown 2-byte one (id 9), an unknown
+    # length-prefixed one (id 10), then a temperature.
+    record = bytes([0x23, 0, 3, 0x49, 1, 2, 0xCA, 2, 7, 7, 0x01, 21])
+    (got,) = decode_compact(header + record)[1]
+    assert got.temperature == 21

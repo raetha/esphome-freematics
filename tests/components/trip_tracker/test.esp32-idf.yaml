@@ -1,0 +1,85 @@
+# ESPHome-style component test: every option and automation of trip_tracker,
+# compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
+esphome:
+  name: test-trip-tracker
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [trip_tracker]
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+wifi:
+  ssid: MySSID
+  password: password1
+
+sensor:
+  - platform: template
+    id: battery
+    lambda: return 12.6;
+  - platform: template
+    id: temperature
+    lambda: return 21.5;
+  - platform: template
+    id: cell_rssi
+    lambda: return -85;
+  - platform: template
+    id: impact
+
+binary_sensor:
+  - platform: template
+    id: moved
+    lambda: return true;
+
+trip_tracker:
+  id: trips
+  moving_speed: 8
+  stop_delay: 120s
+  start_fixes: 2
+  start_distance: 30m
+  start_motion: 120s
+  motion: moved
+  battery_voltage: battery
+  temperature: temperature
+  signal: cell_rssi
+  impact: impact
+  time_id: sntp_time
+  on_trip_start:
+    - logger.log: "trip started"
+  on_trip_stop:
+    - logger.log: "trip stopped"
+  on_fix:
+    - lambda: ESP_LOGD("test", "fix at %.5f, %.5f", fix.latitude, fix.longitude);
+  on_impact:
+    - lambda: ESP_LOGW("test", "impact %.1f g", peak_g);
+
+# A fix source with the members add_fix reads (freematics_link's Fix has them)
+interval:
+  - interval: 2s
+    then:
+      - lambda: |-
+          struct {
+            uint32_t epoch = 1800000000;
+            float latitude = 40.7128f, longitude = -74.006f, speed_kmh = 52.0f, course_deg = 270.0f,
+                  altitude_m = 12.0f;
+            uint8_t satellites = 9, hdop = 11;
+          } fix;
+          id(trips).add_fix(fix);
+          if (id(trips).is_moving())
+            id(trips).going_to_sleep(6 * 3600);
+      - if:
+          condition:
+            trip_tracker.is_moving: trips
+          then:
+            - lambda: id(trips).flush();

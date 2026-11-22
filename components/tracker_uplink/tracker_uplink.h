@@ -1,31 +1,18 @@
 #pragma once
 
-#include <array>
 #include <cmath>
-
-#include <memory>
-#include <string>
 
 #include "esphome/core/automation.h"
 #include "esphome/core/component.h"
-#include "esphome/components/socket/ipv4_resolve.h"
-#include "esphome/components/socket/socket.h"
-#ifdef USE_SENSOR
-#include "esphome/components/sensor/sensor.h"
-#endif
-#ifdef USE_TIME
-#include "esphome/components/time/real_time_clock.h"
-#endif
+#include "esphome/components/trip_tracker/trip_tracker.h"
 #ifdef USE_FILE_QUEUE
 #include "esphome/components/file_queue/file_queue.h"
 #endif
 
 #include "backlog.h"
-#include "compact.h"
-#include "freematics_text.h"
 #include "teltonika.h"
 #include "tracker.h"
-#include "webhook.h"
+#include "transport.h"
 
 namespace esphome::tracker_uplink {
 
@@ -36,167 +23,67 @@ using Store = file_queue::FileQueue;
 #else
 using Store = ::trackcodec::NoStore;
 #endif
-using ::trackcodec::Tracker;
-using ::trackcodec::TrackerConfig;
 
-/// Decides what to report from the GNSS fixes (tracker.h) and sends it: to
-/// Traccar as GH3000 records over UDP (or its Freematics text protocol), or to
-/// Home Assistant's Freematics integration as compact batches posted to a
-/// webhook. Records stay queued, in memory or on an SD card file, until the
-/// server acknowledges them. Several can run side by side (Traccar and Home
-/// Assistant), each with its own queue.
-class TrackerUplink final : public Component {
+/// Reports one car's trips (trip_tracker) to one server: decides which fixes
+/// become records (tracker.h's Sampler: a record every few seconds while
+/// moving, more on turns, heartbeats while parked), keeps them, in memory or
+/// on an SD card file, until the server has them, and sends them in batches
+/// through its transport (Teltonika or Freematics to Traccar over UDP, or
+/// compact batches to a Home Assistant webhook). Several can report the same
+/// trips, each to its own server.
+class TrackerUplink final : public Component,
+                            public Parented<trip_tracker::TripTracker>,
+                            public trip_tracker::Listener {
  public:
-  TrackerUplink() {
-    if (count_ < MAX_UPLINKS)
-      instances_[count_++] = this;
-  }
-
-  /// Whether any uplink is on a trip.
-  static bool any_moving() {
-    for (size_t i = 0; i < count_; i++) {
-      if (instances_[i]->is_moving())
-        return true;
-    }
-    return false;
-  }
-  /// Records waiting in all uplinks together.
-  static size_t total_queued() {
-    size_t n = 0;
-    for (size_t i = 0; i < count_; i++)
-      n += instances_[i]->queue_size();
-    return n;
-  }
-  /// Whether every uplink has delivered something since the start.
-  static bool all_sent() {
-    for (size_t i = 0; i < count_; i++) {
-      if (instances_[i]->records_sent() == 0)
-        return false;
-    }
-    return count_ > 0;
-  }
-  /// Send what's queued in every uplink at the next chance.
-  static void flush_all() {
-    for (size_t i = 0; i < count_; i++)
-      instances_[i]->flush();
-  }
-
   void setup() override;
   void loop() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::AFTER_CONNECTION; }
 
-  void set_host(const std::string &host) { this->host_ = host; }
-  void set_port(uint16_t port) { this->port_ = port; }
-  void set_device_id(const std::string &id) { this->device_id_ = id; }
-  /// Traccar's Freematics text protocol instead of GH3000: unacknowledged, so
-  /// records count as delivered once sent; a login event checks the server answers.
-  void set_freematics_protocol(bool on) { this->freematics_ = on; }
-  /// Post compact batches to this Home Assistant webhook URL (HTTPS) instead
-  /// of sending to Traccar; a 2xx answer acknowledges a batch.
-  void set_webhook_url(const std::string &url) { this->webhook_url_ = url; }
+  void set_transport(Transport *t) { this->transport_ = t; }
+  void set_sample_config(const ::trackcodec::SampleConfig &config) { this->sampler_.set_config(config); }
   void set_altitude(bool on) { this->altitude_ = on; }
   void set_send_interval(uint32_t ms) { this->send_interval_ = ms; }
-  void set_ack_timeout(uint32_t ms) { this->ack_timeout_ = ms; }
   void set_max_queue(uint16_t n) { this->max_queue_ = n; }
   void set_batch_max(uint8_t n) { this->batch_max_ = n; }
-  void set_tracker_config(const TrackerConfig &config) { this->tracker_.set_config(config); }
-#ifdef USE_SENSOR
-  void set_battery_sensor(sensor::Sensor *s) { this->battery_ = s; }
-#endif
-#ifdef USE_TIME
-  void set_time(time::RealTimeClock *t) { this->time_ = t; }
-#endif
 #ifdef USE_FILE_QUEUE
   /// Keep every record in this queue (an SD card file) until the server
   /// acknowledges it; memory then holds only the oldest max_queue of them.
   void set_file_queue(file_queue::FileQueue *q) { this->store_ = q; }
 #endif
 
-  /// A valid GNSS fix: date ddmmyy and time hhmmsscc (UTC) as the co-processor reports them.
-  /// altitude_m: NAN when unknown; sent only with set_altitude(true).
-  void add_fix(uint32_t ddmmyy, uint32_t hhmmsscc, float latitude, float longitude, float speed_kmh, float course_deg,
-               uint8_t satellites, float altitude_m = NAN, uint8_t hdop = 0);
+  // trip_tracker::Listener
+  void on_trip_fix(const trip_tracker::Fix &fix, trip_tracker::Trip trip, bool moving, bool fast) override;
+  void on_trip_note(uint32_t time, uint8_t impact_dg, uint16_t next_report_min) override;
+  size_t queued() const override { return this->backlog_.size(); }
+  bool delivered_any() const override { return this->records_sent_ > 0; }
   /// Send what's queued at the next chance instead of waiting for send_interval.
-  void flush() { this->flush_requested_ = true; }
+  void flush() override { this->flush_requested_ = true; }
 
-  bool is_moving() const { return this->tracker_.moving(); }
-  /// Whether a trip may start now (the car was moved lately); see Tracker::set_can_start.
-  void set_can_start(bool can) { this->tracker_.set_can_start(can); }
-  size_t queue_size() const { return this->backlog_.size(); }
   uint32_t records_sent() const { return this->records_sent_; }
-  uint32_t bytes_sent() const { return this->bytes_sent_; }
-
-  Trigger<> *get_motion_start_trigger() { return &this->motion_start_trigger_; }
-  Trigger<> *get_motion_stop_trigger() { return &this->motion_stop_trigger_; }
+  uint32_t bytes_sent() const { return this->transport_->bytes_sent(); }
 
  protected:
   void enqueue_(const Record &record);
-  void send_freematics_(const struct sockaddr *addr, socklen_t addr_len);
-  void send_webhook_();
-  void check_webhook_();
-  bool webhook_() const { return !this->webhook_url_.empty(); }
-  bool now_(uint32_t *unix);
-  void receive_();
+  Record base_record_(uint32_t time, Decision why) const;
+  void set_location_(Record &r, const trip_tracker::Fix &fix) const;
   void send_();
-  Record base_record_(uint32_t time, Decision why);
 
-  std::string host_;
-  uint16_t port_{5027};
-  std::string device_id_;
-  std::string webhook_url_;
-#ifdef USE_UPLINK_WEBHOOK
-  WebhookPoster poster_;
-#endif
-  uint16_t sequence_{0};
+  Transport *transport_{nullptr};
+  ::trackcodec::Sampler sampler_;
   uint32_t send_interval_{60000};
-  uint32_t ack_timeout_{15000};
   uint16_t max_queue_{300};
   uint8_t batch_max_{40};
-#ifdef USE_SENSOR
-  sensor::Sensor *battery_{nullptr};
-#endif
-#ifdef USE_TIME
-  time::RealTimeClock *time_{nullptr};
-#endif
+  bool altitude_{true};
   Store *store_{nullptr};
-
-  Tracker tracker_;
   ::trackcodec::Backlog<Store> backlog_;
-  std::unique_ptr<Record[]> batch_;  // NOLINT(cppcoreguidelines-avoid-c-arrays)
-  uint8_t buf_[1024];
-  socket::Ipv4Resolve resolver_;
-  std::unique_ptr<socket::UDPSocket> socket_;
 
   bool flush_requested_{false};
-  bool in_flight_{false};
-  uint8_t in_flight_count_{0};
-  uint8_t location_packet_id_{0};
-  bool freematics_{false};
-  bool altitude_{true};
-  bool login_answered_{false};
-  uint32_t last_login_{0};
-  uint16_t packet_id_{0};
-  uint8_t failures_{0};
-  uint32_t sent_at_{0};
+  size_t in_flight_{0};  // records sent and awaiting the server's answer
   uint32_t last_send_{0};
   uint32_t last_tick_{0};
-  uint32_t resolve_retry_at_{0};
-
-  // Unix time of the last fix, and the loop time then, so time keeps counting between fixes.
-  uint32_t last_unix_{0};
-  uint32_t last_unix_millis_{0};
-
   uint32_t records_sent_{0};
   uint32_t last_ack_at_{0};  // loop time of the server's last answer; 0: none yet
-  uint32_t bytes_sent_{0};
-
-  Trigger<> motion_start_trigger_;
-  Trigger<> motion_stop_trigger_;
-
-  static constexpr size_t MAX_UPLINKS = 4;
-  static inline std::array<TrackerUplink *, MAX_UPLINKS> instances_{};  // NOLINT
-  static inline size_t count_{0};                                       // NOLINT
 };
 
 template<typename... Ts> class FlushAction : public Action<Ts...>, public Parented<TrackerUplink> {

@@ -1,5 +1,5 @@
 # ESPHome-style component test: every option and automation of tracker_uplink
-# (Traccar and Home Assistant's webhook side by side),
+# (each protocol: Traccar's two and Home Assistant's webhook, side by side),
 # compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
 esphome:
   name: test-traccar-uplink
@@ -19,16 +19,10 @@ external_components:
   - source:
       type: local
       path: ../../../components
-    components: [tracker_uplink]
+    components: [trip_tracker, tracker_uplink]
 
-time:
-  - platform: sntp
-    id: sntp_time
-
-sensor:
-  - platform: template
-    id: battery
-    lambda: return 12.6;
+trip_tracker:
+  id: trips
 
 tracker_uplink:
   - id: traccar
@@ -39,33 +33,29 @@ tracker_uplink:
     ack_timeout: 10s
     max_queue: 100
     batch_max: 20
-    battery_voltage: battery
-    time_id: sntp_time
-    moving_speed: 8
-    stop_delay: 120s
     moving_interval: 5s
     turn_angle: 45
     min_turn_interval: 2s
     heartbeat_interval: 30min
-    on_motion_start:
-      - logger.log: "moving"
-    on_motion_stop:
-      - tracker_uplink.flush: traccar
+    altitude: false
 
-  # A second uplink: Home Assistant's webhook, beside Traccar
+  - id: traccar_text
+    protocol: freematics
+    host: traccar.example.com
+    device_id: test-device
+
+  # Home Assistant's webhook, beside Traccar
   - id: ha_uplink
+    trip_tracker_id: trips
     protocol: home_assistant
     url: https://hooks.nabu.casa/test-webhook-id
     send_interval: 2min
     batch_max: 60
-    battery_voltage: battery
-    time_id: sntp_time
 
 interval:
   - interval: 2s
     then:
+      - tracker_uplink.flush: traccar
       - lambda: |-
-          id(traccar).add_fix(191126, 18300500, 40.7128f, -74.006f, 52.0f, 270.0f, 9);
-          id(ha_uplink).set_can_start(true);
-          id(ha_uplink).add_fix(191126, 18300500, 40.7128f, -74.006f, 52.0f, 270.0f, 9, 12.0f, 11);
-          ESP_LOGD("test", "moving %d, queued %u", id(traccar).is_moving(), (unsigned) id(traccar).queue_size());
+          ESP_LOGD("test", "queued %u, sent %" PRIu32 " records in %" PRIu32 " bytes", (unsigned) id(traccar).queued(),
+                   id(ha_uplink).records_sent(), id(ha_uplink).bytes_sent());

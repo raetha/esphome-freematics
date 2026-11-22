@@ -120,9 +120,20 @@ With tests 2 to 6 passing: the dongle in the car on OBD power, with the SD packa
 
 With `packages/standby.yaml` uncommented in the car config, in the car (on USB power it sleeps once still for 10 minutes too; `standby_on_usb: "false"` keeps a bench device awake). Drive, park, and leave it: 3 minutes after stopping Traccar gets the stop record; 10 minutes after that the device logs "Standby: parked; sending what's waiting, then sleeping" and "Standby: sleeping", and goes quiet (the logs disconnect). Start the car: within a minute it wakes ("Woke: 14.x V, the car is on"), presses the modem's power key and tracks again. Left parked, it reports one record every 6 hours.
 
-**Look for:** the standby lines in the SD card's log, including "Motion sensor: ICM-42627" at start and "Motion wake set (150 mg)" before sleeping; in Traccar, the 6-hourly records while parked and the first record of the next trip. To try motion wake: once it's asleep, open and close a door, or rock the car: within a minute the log says "Woke: ... the car moved".
+**Look for:** the standby lines in the SD card's log, including the motion sensor's "Model: ICM-42627" in the config dump at start and "Motion wake set (150 mg)" before sleeping; in Traccar, the 6-hourly records while parked and the first record of the next trip. To try motion wake: once it's asleep, open and close a door, or rock the car: within a minute the log says "Woke: ... the car moved".
 
 **Send back:** the SD card's log after a night or a weekend, and the 12 V battery's behaviour if anything seems off. To update it while it sleeps, start the car (or unplug and plug it back in): it stays awake for 10 minutes.
+
+## 7d. Impact, temperature and GNSS restart (on the bench)
+
+On USB power with the logs open, after updating (the trips now come from the board package's trip tracker, so check a short drive still makes one trip in each server).
+
+- **Impact**: set `impact_threshold: 1.5g` for the test, then give the dongle a sharp knock on the desk (not a drop). The log says "Impact: x.x g" and "Impact of x.x g: reporting it now"; in Home Assistant the Impact event fires with the peak, in Traccar the record has `io247`. A plain shake or turning the dongle over shouldn't count. Set it back to `4g` afterwards.
+- **Temperature**: the Temperature sensor in Home Assistant (or `io72` in Traccar) after the next heartbeat; roughly the room's, a few degrees warmer.
+- **GNSS restart**: indoors without a fix, every 10 minutes the log says "No GNSS fix for 10 min: switching the GNSS off and on again"; outdoors the fix comes back as before.
+- **Motion**: "Moved" in the log when the dongle is handled, and nothing at start-up.
+
+**Send back:** the log around the knock, and the peaks of a few knocks and of a normal drive's bumps, to choose the threshold.
 
 ## 7c. Listening to the OBD port (vehicle data, step one)
 

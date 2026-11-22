@@ -7,6 +7,8 @@
 //   compact <capacity> <sequence> <base_time> <n> then n lines:
 //     <kind> <time> <has_location> <lat> <lon> <speed> <course> <sats> <hdop> <battery_mv> [<altitude> if has == 2]
 //   -> records added, then the hex of the batch
+//   extras <has_temperature> <temperature_c> <signal_dbm> <impact_dg> <next_report_min>
+//     -> nothing; every record after it (packet, compact, freematics) carries these
 //   base64 <hex>  -> the base64 text of those bytes
 //   ack <hex> <location_packet_id>  -> accepted count or -1
 //   unix <ddmmyy> <hhmmsscc>        -> Unix seconds
@@ -28,10 +30,28 @@
 
 using namespace trackcodec;
 
+static Record g_extras{};
+
+static void with_extras(Record &r) {
+  r.has_temperature = g_extras.has_temperature;
+  r.temperature_c = g_extras.temperature_c;
+  r.signal_dbm = g_extras.signal_dbm;
+  r.impact_dg = g_extras.impact_dg;
+  r.next_report_min = g_extras.next_report_min;
+}
+
 int main() {
   char cmd[32];
   while (std::scanf("%31s", cmd) == 1) {
-    if (!std::strcmp(cmd, "packet")) {
+    if (!std::strcmp(cmd, "extras")) {
+      int has, temp, signal, impact, next;
+      std::scanf("%d %d %d %d %d", &has, &temp, &signal, &impact, &next);
+      g_extras.has_temperature = has != 0;
+      g_extras.temperature_c = static_cast<int8_t>(temp);
+      g_extras.signal_dbm = static_cast<int8_t>(signal);
+      g_extras.impact_dg = static_cast<uint8_t>(impact);
+      g_extras.next_report_min = static_cast<uint16_t>(next);
+    } else if (!std::strcmp(cmd, "packet")) {
       unsigned pid, lpid, n;
       char id[80];
       std::scanf("%u %u %79s %u", &pid, &lpid, id, &n);
@@ -46,6 +66,7 @@ int main() {
         r.satellites = sats;
         r.battery_mv = mv;
         r.motion = motion;
+        with_extras(r);
         if (has == 2) {  // a location with altitude: one more field, metres
           int alt;
           std::scanf("%d", &alt);
@@ -86,6 +107,7 @@ int main() {
         r.satellites = sats;
         r.hdop = hdop;
         r.battery_mv = mv;
+        with_extras(r);
         if (has == 2) {
           int alt;
           std::scanf("%d", &alt);
@@ -117,6 +139,7 @@ int main() {
         r.satellites = sats;
         r.battery_mv = mv;
         r.motion = motion;
+        with_extras(r);
       }
       std::vector<char> buf(size);
       size_t len = encode_freematics(buf.data(), buf.size(), id, rs.data(), rs.size());

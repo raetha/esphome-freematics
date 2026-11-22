@@ -13,7 +13,7 @@ Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](http
 | OBD-II | none | CAN (TJA1050) and K-line are on the STM32 |
 | Battery voltage | GPIO36 (ADC) | 100k/10k divider: × 11, then calibrate. `ATRV` on the co-processor is the alternative |
 | microSD (SPI) | CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23 | |
-| IMU (I2C) | SDA GPIO21, SCL GPIO22 | ICM-42627 at 0x68 on the owner's Model B (WHO_AM_I register 0x75 reads 0x20, as Freematics' `ICM_42627` driver expects; 2026-11-20). MPU9250 on the r14 schematic, ICM-20948 on the product page: earlier revisions. No interrupt line is known to reach the ESP32; `packages/standby.yaml` reads the latched wake-on-motion flag instead |
+| IMU (I2C) | SDA GPIO21, SCL GPIO22 | ICM-42627 at 0x68 on the owner's Model B (WHO_AM_I register 0x75 reads 0x20, as Freematics' `ICM_42627` driver expects; 2026-11-20). MPU9250 on the r14 schematic, ICM-20948 on the product page: earlier revisions. No interrupt line is known to reach the ESP32; `packages/standby.yaml` reads the latched wake-on-motion flag instead. Awake, the `icm426xx` component streams the accelerometer at 100 Hz, ±16 g, through the chip's FIFO (packets of header, X/Y/Z and temperature, 8 bytes each) over a 400 kHz bus: movement, impacts and the chip's temperature come from it |
 | Buzzer, LED | GPIO25, GPIO4 | The stock firmware drives the buzzer at 2 kHz (LEDC) and beeps 50 ms when it reaches its server over Wi-Fi or once cellular is in service (`telelogger.ino`); the board package does the same, plus 200 ms at start-up |
 | USB serial | CP2102 on UART0 | Flashing and logs |
 | Flash | 16 MB | PSRAM: unconfirmed |

@@ -1,6 +1,6 @@
-# Report to Traccar: GNSS fixes as compact Teltonika GH3000 records over UDP,
-# batched, acknowledged by Traccar, and kept in memory until they are.
-# Nothing here talks to Home Assistant. See docs/configurations.md.
+# Report to Traccar: the board package's trips as compact Teltonika GH3000
+# records over UDP, batched, acknowledged by Traccar, and kept in memory until
+# they are. Nothing here talks to Home Assistant. See docs/configurations.md.
 #
 # Needs the board package, and the tracker_uplink component from this
 # repository's components/ (external_components: in the device config).
@@ -13,46 +13,19 @@ substitutions:
   traccar_protocol: teltonika         # or freematics: the stock firmware's text protocol, unacknowledged and about 4 times the data; for checking a server
   traccar_port: "5027"                # Traccar's Teltonika port (UDP); 5170 for freematics
   traccar_send_interval: 60s          # batch fixes this long before sending (sooner on a stop or a full batch)
-  traccar_moving_speed: "6"           # km/h: at or above, the car is moving
   traccar_moving_interval: 10s        # a fix at least this often while moving
   traccar_turn_angle: "30"            # degrees: a turn this sharp records a fix early
   traccar_altitude: "true"            # send altitude: 2 bytes per position, about 7% more data while driving
-  traccar_start_fixes: "3"            # a trip starts after this many fast fixes in a row (2 s apart)...
-  traccar_start_distance: 50m         # ...this far from where the car was parked (GPS drift doesn't start trips)
-  traccar_start_motion: "300"       # s: a trip starts only this soon after the motion sensor felt the car move (getting in, driving); "0": GPS alone
-  traccar_stop_delay: 180s            # below moving speed this long: the trip is over (telelogger: 180 s)
   traccar_heartbeat_interval: 15min   # one record this often while parked; 0s: none (telelogger: 15 min)
 
 tracker_uplink:
   - id: traccar
-    host: ${traccar_host}
     protocol: ${traccar_protocol}
+    host: ${traccar_host}
     port: ${traccar_port}
     device_id: ${traccar_device_id}
     send_interval: ${traccar_send_interval}
-    moving_speed: ${traccar_moving_speed}
     moving_interval: ${traccar_moving_interval}
     turn_angle: ${traccar_turn_angle}
     altitude: ${traccar_altitude}
-    start_fixes: ${traccar_start_fixes}
-    start_distance: ${traccar_start_distance}
-    stop_delay: ${traccar_stop_delay}
     heartbeat_interval: ${traccar_heartbeat_interval}
-    battery_voltage: battery_voltage    # sent with trip starts, stops and heartbeats
-    time_id: sntp_time
-    # Hooks for later: OBD values read once per stop, not while driving.
-    on_motion_stop:
-      - logger.log: "Parked"
-
-script:
-  - id: !extend on_gnss_fix
-    then:
-      - lambda: |-
-          // GPS drift while the car sits still (a garage, a house, a desk)
-          // never starts a trip: the motion sensor must have felt it move.
-          // Without a supported sensor, GPS decides alone.
-          const uint32_t window_ms = ${traccar_start_motion} * 1000UL;
-          id(traccar).set_can_start(window_ms == 0 || !id(motion_sensor) ||
-                                    (id(motion_ms) != 0 && millis() - id(motion_ms) < window_ms));
-          id(traccar).add_fix(id(gnss_date), id(gnss_time), id(gnss_lat), id(gnss_lon),
-                              id(gnss_kmh), id(gnss_course), id(gnss_sats), id(gnss_alt), id(gnss_hdop));

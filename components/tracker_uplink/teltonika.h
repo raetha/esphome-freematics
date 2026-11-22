@@ -33,15 +33,53 @@ struct Record {
   int8_t motion;  // -1: not sent; 0 or 1 (GH3000 IO 240)
   uint8_t hdop;   // HDOP x 10, as the co-processor reports it (compact batches only)
   uint8_t kind;   // why it was recorded: the tracker's Decision (compact batches only)
+  // Extras that ride along with trip starts, stops and heartbeats (and impacts):
+  bool has_temperature;      // temperature_c is known
+  int8_t temperature_c;      // the dongle's (its motion sensor's) temperature (GH3000 IO 72)
+  int8_t signal_dbm;         // cellular signal; 0: unknown (GH3000 IO 205, as -dBm)
+  uint8_t impact_dg;         // an impact's peak in tenths of g; 0: none (GH3000 IO 247)
+  uint16_t next_report_min;  // the next report comes within this many minutes (going to sleep); 0: not said
 };
+
+// GH3000 IO elements Traccar keeps as io<id> attributes (its GH3000 decoder
+// names only a few: 67 battery, 240 motion). Values are unsigned there.
+static constexpr uint8_t IO_TEMPERATURE = 72;  // degrees C; above 127 is negative (subtract 256)
+static constexpr uint8_t IO_SIGNAL = 205;      // cellular signal, -dBm (85: -85 dBm)
+static constexpr uint8_t IO_IMPACT = 247;      // an impact's peak, tenths of g
+static constexpr uint8_t IO_BATTERY = 67;      // millivolts (Traccar: battery)
+static constexpr uint8_t IO_MOTION = 240;      // 0 or 1 (Traccar: motion)
+
+// The 1-byte IO elements a record carries, in ids[] and values[]; returns how many.
+inline size_t io_bytes(const Record &r, uint8_t *ids, uint8_t *values) {
+  size_t n = 0;
+  if (r.motion >= 0) {
+    ids[n] = IO_MOTION;
+    values[n++] = r.motion ? 1 : 0;
+  }
+  if (r.has_temperature) {
+    ids[n] = IO_TEMPERATURE;
+    values[n++] = static_cast<uint8_t>(r.temperature_c);
+  }
+  if (r.signal_dbm < 0) {
+    ids[n] = IO_SIGNAL;
+    values[n++] = static_cast<uint8_t>(-r.signal_dbm);
+  }
+  if (r.impact_dg > 0) {
+    ids[n] = IO_IMPACT;
+    values[n++] = r.impact_dg;
+  }
+  return n;
+}
 
 // Bytes a record takes in a packet.
 inline size_t record_size(const Record &r) {
   size_t n = 4 + 1;  // time, global mask
   if (r.has_location)
     n += 1 + 8 + 1 + 1 + 1 + (r.has_altitude ? 2 : 0);  // location mask, lat/lon, altitude, course, speed, sats
-  if (r.motion >= 0)
-    n += 1 + 1 + 1;  // count, id, 1-byte value
+  uint8_t ids[4], values[4];
+  size_t bytes = io_bytes(r, ids, values);
+  if (bytes > 0)
+    n += 1 + 2 * bytes;  // count, then an id and a 1-byte value each
   if (r.battery_mv > 0)
     n += 1 + 1 + 2;  // count, id, 2-byte value
   return n;
@@ -101,8 +139,10 @@ inline size_t encode_packet(uint8_t *out, size_t cap, uint16_t packet_id, uint8_
     const Record &r = records[i];
     uint32_t t = r.time > GH3000_EPOCH ? r.time - GH3000_EPOCH : 0;
     put32(p, t & 0x3fffffff);
+    uint8_t ids[4], values[4];
+    size_t bytes = io_bytes(r, ids, values);
     uint8_t global = r.has_location ? 0x01 : 0x00;
-    if (r.motion >= 0)
+    if (bytes > 0)
       global |= 0x02;
     if (r.battery_mv > 0)
       global |= 0x04;
@@ -123,14 +163,16 @@ inline size_t encode_packet(uint8_t *out, size_t cap, uint16_t packet_id, uint8_
       put8(p, static_cast<uint8_t>(std::lround(speed)));
       put8(p, r.satellites);
     }
-    if (r.motion >= 0) {
-      put8(p, 1);
-      put8(p, 240);
-      put8(p, r.motion ? 1 : 0);
+    if (bytes > 0) {
+      put8(p, static_cast<uint8_t>(bytes));
+      for (size_t j = 0; j < bytes; j++) {
+        put8(p, ids[j]);
+        put8(p, values[j]);
+      }
     }
     if (r.battery_mv > 0) {
       put8(p, 1);
-      put8(p, 67);
+      put8(p, IO_BATTERY);
       put16(p, r.battery_mv);
     }
   }

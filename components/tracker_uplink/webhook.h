@@ -14,6 +14,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "transport.h"
+
 namespace esphome::tracker_uplink {
 
 /// Posts a body to an HTTPS URL (a Home Assistant webhook) from a task of its
@@ -49,6 +51,27 @@ class WebhookPoster {
   size_t len_{0};
   esp_http_client_handle_t client_{nullptr};
   TaskHandle_t task_handle_{nullptr};
+};
+
+/// Compact batches (compact.h) posted to a Home Assistant webhook over HTTPS,
+/// for the Freematics integration (raetha/ha-freematics); a 2xx answer
+/// acknowledges a batch.
+class WebhookTransport final : public Transport {
+ public:
+  void set_url(const std::string &url) { this->url_ = url; }
+  const char *server() const override { return "Home Assistant"; }
+  bool setup(size_t batch_max) override;
+  void dump_config() override;
+  bool ready() override { return this->poster_.idle(); }
+  size_t send(const RecordQueue &records, size_t max) override;
+  SendResult poll(uint32_t now) override;
+
+ protected:
+  std::string url_;
+  WebhookPoster poster_;
+  uint16_t sequence_{0};
+  size_t in_flight_{0};
+  uint8_t buf_[1024];
 };
 
 }  // namespace esphome::tracker_uplink

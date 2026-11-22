@@ -14,14 +14,13 @@ api:
   outgoing_connection:
     delay: 60s
 
-script:
-  - id: !extend on_gnss_fix
-    then:
-      - lambda: |-
-          id(gnss_latitude).publish_state(id(gnss_lat));
-          id(gnss_longitude).publish_state(id(gnss_lon));
-          id(gnss_speed).publish_state(id(gnss_kmh));
-          id(gnss_satellites).publish_state(id(gnss_sats));
+trip_tracker:
+  on_fix:
+    - lambda: |-
+        id(gnss_latitude).publish_state(fix.latitude);
+        id(gnss_longitude).publish_state(fix.longitude);
+        id(gnss_speed).publish_state(fix.speed_kmh);
+        id(gnss_satellites).publish_state(fix.satellites);
 
 # Each sends only on a real change, and at most every 15 minutes otherwise.
 sensor:
@@ -33,13 +32,24 @@ sensor:
       - or:
           - throttle: 15min
           - delta: 0.2
-  - platform: modem
-    rssi:
-      name: Cellular RSSI
-      filters:
-        - or:
-            - throttle: 15min
-            - delta: 4
+  # The board package's own sensors, shown in Home Assistant
+  - platform: copy
+    source_id: cell_signal
+    name: Cellular RSSI
+    filters:
+      - or:
+          - throttle: 15min
+          - delta: 4
+  - platform: copy
+    source_id: dongle_temperature
+    name: Temperature
+    filters:
+      - or:
+          - throttle: 15min
+          - delta: 2
+  - platform: copy
+    source_id: impact_peak
+    name: Impact
   - platform: uptime
     name: Uptime
     update_interval: 15min
@@ -85,6 +95,9 @@ text_sensor:
       name: Co-processor version
 
 binary_sensor:
+  - platform: copy
+    source_id: car_motion
+    name: Motion
   - platform: freematics_link
     fix:
       name: GNSS fix

@@ -1,0 +1,53 @@
+# ESPHome-style component test: every option and action of icm426xx,
+# compiled for an ESP32 with ESP-IDF. CI builds it alongside the examples.
+esphome:
+  name: test-icm426xx
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [icm426xx]
+
+i2c:
+  id: bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 400kHz
+
+icm426xx:
+  id: imu
+  address: 0x68
+  motion_threshold: 80mg
+  impact_threshold: 3.5g
+  motion_hold: 15s
+  update_interval: 60s
+
+binary_sensor:
+  - platform: icm426xx
+    motion:
+      name: Motion
+
+sensor:
+  - platform: icm426xx
+    temperature:
+      name: Temperature
+    impact:
+      name: Impact
+
+interval:
+  - interval: 60s
+    then:
+      - icm426xx.arm_wake:
+          id: imu
+          threshold: 150mg
+      - icm426xx.arm_wake:
+          id: imu
+          threshold: !lambda "return id(imu).woke_by_motion() ? 0.0f : 0.15f;"

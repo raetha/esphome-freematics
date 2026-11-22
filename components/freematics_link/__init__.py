@@ -20,6 +20,7 @@ MULTI_CONF = False
 CONF_FREEMATICS_LINK_ID = "freematics_link_id"
 CONF_GNSS_INTERVAL = "gnss_interval"
 CONF_BATTERY_INTERVAL = "battery_interval"
+CONF_GNSS_RESTART = "gnss_restart"
 CONF_ON_FIX = "on_fix"
 
 freematics_link_ns = cg.esphome_ns.namespace("freematics_link")
@@ -45,6 +46,8 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_RESET_PIN): pins.gpio_output_pin_schema,
             cv.Optional(CONF_GNSS_INTERVAL, default="2s"): _interval_or_off,
             cv.Optional(CONF_BATTERY_INTERVAL, default="60s"): _interval_or_off,
+            # No fix this long: the GNSS is switched off and on again (0s: never)
+            cv.Optional(CONF_GNSS_RESTART, default="10min"): _interval_or_off,
             cv.Optional(CONF_ON_FIX): automation.validate_automation({}),
         }
     )
@@ -64,6 +67,7 @@ async def to_code(config):
     if reset := config.get(CONF_RESET_PIN):
         cg.add(var.set_reset_pin(await cg.gpio_pin_expression(reset)))
     cg.add(var.set_gnss_interval(config[CONF_GNSS_INTERVAL].total_milliseconds))
+    cg.add(var.set_gnss_restart(config[CONF_GNSS_RESTART].total_milliseconds))
     cg.add(var.set_battery_interval(config[CONF_BATTERY_INTERVAL].total_milliseconds))
     for conf in config.get(CONF_ON_FIX, []):
         await automation.build_automation(var.get_fix_trigger(), [(Fix, "fix")], conf)
