@@ -10,6 +10,7 @@ Pins and interfaces as ESPHome uses them. Sources: the [ONE+ r14 schematic](http
 | Co-processor link (STM32F103) | RX GPIO13, TX GPIO14, reset GPIO15 (active low) | 115200 baud (`LINK_UART_BAUDRATE`), ELM327-style AT commands |
 | Internal GNSS | none | Wired to the STM32's PB10/PB11; read through the co-processor (below) |
 | External GNSS (optional M10) | RX GPIO32 or 34, TX GPIO33 or 26, power GPIO15 or 12 | Which pair depends on the co-processor version (`gpsBeginExt`). GPIO12 is the flash-voltage strapping pin: leave it alone unless an external receiver is fitted |
+| Clock | none | No real-time clock chip and no 32 kHz crystal: deep sleep keeps time on the ESP32's internal 150 kHz oscillator, which drifts (about 0.7% measured), so the clock is trusted only once SNTP or a GNSS fix sets it after a start ([backlog.md](backlog.md) has a steadier option) |
 | OBD-II | none | CAN (TJA1050) and K-line are on the STM32 |
 | Battery voltage | GPIO36 (ADC) | 100k/10k divider: × 11, then calibrate. `ATRV` on the co-processor is the alternative |
 | microSD (SPI) | CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23 | |
