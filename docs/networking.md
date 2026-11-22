@@ -8,6 +8,8 @@ Cellular data is the scarcest resource in this project: every design choice is w
 
 While the car is moving (a fresh GNSS fix at `wifi_pause_speed`, 10 km/h, or more) and Wi-Fi isn't connected, the package turns Wi-Fi off (`wifi.disable`), since away from home ESPHome otherwise scans every few seconds for the whole drive (seen on the first drive), which is radio noise and power beside the GNSS antenna. Wi-Fi comes back on (`wifi.enable`) once the car has been below that speed for `wifi_resume_after` (30 s) or GNSS has had no fix for that long, as in a garage. A connection made before driving off (a phone hotspot) is never dropped. `wifi_pause_speed: "1000"` turns the pause off.
 
+Parked, a search that finds no known network within `wifi_search_time` (2 minutes) stops until the car has moved again (at `wifi_pause_speed`), since a stopped car won't come into range of one: ESPHome would otherwise scan, try each missing network as a hidden one and reset the radio about every 8 seconds for as long as the dongle is awake (a day parked at work logged about 400 failed attempts an hour). Each start or wake of the dongle searches again, and so does a connected network dropping. `wifi_search_time: "0"` searches on.
+
 `wifi:` and `modem:` validate together in ESPHome 2026.11. ESPHome's `network: priority` can't include the modem yet, so in the moment both are up the default route is ESP-IDF's: the connected interface with the highest route priority (Wi-Fi station 100, PPP 20), which also favours Wi-Fi. Phase 1 confirms the handover on hardware: the Traccar uplink just sends its next packet over whichever link is up; the API connection reconnects.
 
 ## Home Assistant configuration: native API, dialled from the device
