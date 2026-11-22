@@ -49,6 +49,8 @@ void FreematicsLink::enter_standby() {
 }
 
 void FreematicsLink::setup() {
+  // In every log, the card's included, so it's clear which code a log came from.
+  ESP_LOGI(TAG, "Firmware from raetha/esphome-freematics %s", this->source_);
   // The library resets co-processors from version 14 on with this pin; holding
   // it low briefly is harmless for older ones, which ignore it.
   if (this->reset_pin_ != nullptr) {
@@ -63,10 +65,11 @@ void FreematicsLink::dump_config() {
   ESP_LOGCONFIG(
       TAG,
       "Freematics co-processor link:\n"
+      "  Firmware from raetha/esphome-freematics %s\n"
       "  GNSS read every %" PRIu32 " ms (0: off)\n"
       "  Battery voltage read every %" PRIu32 " ms (0: off)\n"
       "  Sends only ATI, ATRV, ATGPSON, ATGPS, and ATGPSOFF and ATLP before sleeping: nothing reaches the vehicle bus",
-      this->gnss_interval_, this->battery_interval_);
+      this->source_, this->gnss_interval_, this->battery_interval_);
   LOG_PIN("  Reset pin: ", this->reset_pin_);
   // Shown whenever a log viewer connects, so it says how the link is doing now.
   if (this->version_number_ != 0) {

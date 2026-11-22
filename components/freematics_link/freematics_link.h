@@ -40,6 +40,8 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   /// Switch the GNSS off and on again after this long without a fix (0: never),
   /// as the stock firmware does for a receiver that stopped producing fixes.
   void set_gnss_restart(uint32_t ms) { this->gnss_restart_ = ms; }
+  /// The esphome-freematics commit the firmware was built from, for the log.
+  void set_source(const char *source) { this->source_ = source; }
 #ifdef USE_SENSOR
   void set_latitude_sensor(sensor::Sensor *s) { this->latitude_ = s; }
   void set_longitude_sensor(sensor::Sensor *s) { this->longitude_ = s; }
@@ -82,6 +84,7 @@ class FreematicsLink final : public Component, public uart::UARTDevice {
   uint32_t gnss_interval_{2000};
   uint32_t battery_interval_{60000};
   uint32_t gnss_restart_{600000};
+  const char *source_{"unknown"};
   uint32_t gnss_since_{0};  // loop time of the last good fix, or of switching the GNSS on
   uint16_t gnss_restarts_{0};
 #ifdef USE_SENSOR

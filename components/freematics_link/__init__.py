@@ -6,6 +6,9 @@ ATGPS, and ATGPSOFF and ATLP before sleeping); there is no way to send it
 anything else, so nothing reaches the bus.
 """
 
+import subprocess
+from pathlib import Path
+
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation, pins
@@ -60,8 +63,41 @@ FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema(
 )
 
 
+def _source() -> str:
+    """The commit of this repository the firmware was built from, as
+    "<hash> (<commit date>)", or "unknown": ESPHome fetches components and
+    packages with git, so their checkout knows it."""
+    here = Path(__file__).resolve().parent
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(here),
+                "log",
+                "-1",
+                "--format=%h (%cd)",
+                "--date=format:%Y-%m-%d %H:%M",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(here), "diff", "--quiet", "HEAD", "--", "."],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    return f"{out} with local changes" if dirty.returncode == 1 else out or "unknown"
+
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
+    cg.add(var.set_source(_source()))
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
     if reset := config.get(CONF_RESET_PIN):
