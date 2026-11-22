@@ -64,6 +64,7 @@ substitutions:
   # sd_log_max_size: 1MB      # two files at most: 2 MB
 
   # SD card: log download (sd-logs-download.yaml)
+  # sd_log_password: !secret car1_log_password  # required with sd-logs-download.yaml: 8 characters or more, a secret for each dongle
   # sd_log_username: logs     # the download's username
 
   # Sleep while parked (standby.yaml)
@@ -78,6 +79,7 @@ substitutions:
   # standby_stay_awake: 30min     # the "Stay awake" switch turns itself off after this
 
   # Home Assistant integration (uplink-ha-webhook.yaml)
+  # ha_webhook_url: !secret car1_webhook_url  # required with uplink-ha-webhook.yaml: the dongle's webhook URL from the integration, a secret for each dongle
   # ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
   # ha_moving_interval: 10s           # a record at least this often while moving
   # ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none

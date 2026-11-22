@@ -15,6 +15,7 @@
 # dongle: each has its own webhook).
 
 substitutions:
+  # ha_webhook_url: !secret car1_webhook_url  # required with uplink-ha-webhook.yaml: the dongle's webhook URL from the integration, a secret for each dongle
   ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
   ha_moving_interval: 10s           # a record at least this often while moving
   ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none

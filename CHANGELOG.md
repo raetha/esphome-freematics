@@ -31,6 +31,8 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 
 ### Internal
 
+- The examples list the settings an optional package requires (`sd_log_password`, `ha_webhook_url`) among the commented-out settings, with an example value.
+
 - Documented the board's lack of a clock chip and ESP-IDF's steadier sleep clock option, set aside for now.
 
 - The components meant for other boards (SD card, file queue and logger, motion sensor, trips and uplinks) name nothing specific to this dongle, ready to move to a repository of their own and then to ESPHome once the project is stable.

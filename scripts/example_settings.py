@@ -3,7 +3,9 @@
 
 Each example lists, under its substitutions, every substitution the packages it
 can load define, with the package's default and comment, so users see what
-they can change without reading the packages. The block sits between two
+they can change without reading the packages. A setting a package requires has
+no default: the package writes it as a comment with an example value, and it's
+listed as it is. The block sits between two
 marker lines; this script rewrites it from the packages.
 
     scripts/example_settings.py            rewrite the examples
@@ -53,6 +55,11 @@ def packages_of(example: str) -> list[str]:
     return re.findall(r"^\s*#?\s*- packages/([\w.-]+\.yaml)", example, re.MULTILINE)
 
 
+def _key(commented: str) -> str:
+    """The setting a commented-out line names: "# key: value" -> "key"."""
+    return commented.lstrip("# ").split(":", 1)[0]
+
+
 def block(example: str) -> list[str]:
     out = [BEGIN]
     for name in packages_of(example):
@@ -62,7 +69,14 @@ def block(example: str) -> list[str]:
         if len(out) > 1:
             out.append("")
         out.append(f"  # {TITLES.get(name, name)}")
-        out += [f"  # {line.strip()}" for line in settings]
+        for line in settings:
+            text = line.strip()
+            if not text.startswith("#"):
+                out.append(f"  # {text}")
+            # A required setting is already a comment in the package (it has no
+            # default): listed as it is, unless the example sets it already.
+            elif not re.search(rf"^  {re.escape(_key(text))}:", example, re.MULTILINE):
+                out.append(f"  {text}")
     out.append(END)
     return out
 

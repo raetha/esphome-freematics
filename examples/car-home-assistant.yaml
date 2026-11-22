@@ -54,6 +54,7 @@ substitutions:
   # sd_log_max_size: 1MB      # two files at most: 2 MB
 
   # SD card: log download (sd-logs-download.yaml)
+  # sd_log_password: !secret car1_log_password  # required with sd-logs-download.yaml: 8 characters or more, a secret for each dongle
   # sd_log_username: logs     # the download's username
   # End of the optional settings.
 
