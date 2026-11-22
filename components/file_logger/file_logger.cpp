@@ -1,5 +1,9 @@
 #include "file_logger.h"
 
+#ifdef USE_FILE_LOGGER_HTTP
+#include "esphome/components/network/util.h"
+#endif
+
 #include <algorithm>
 #include <cinttypes>
 #include <cstring>
@@ -36,7 +40,15 @@ void FileLogger::setup() {
   if (this->web_server_ != nullptr) {
     this->chunk_ = std::make_unique<char[]>(DOWNLOAD_CHUNK);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
     this->web_server_->add_handler(&this->handler_);
-    this->web_server_->init();
+    // The HTTP server opens a socket, which needs the network stack: this
+    // component starts before the network does (to log its start), so the
+    // server starts once there's a network.
+    this->set_interval("http", 1000, [this]() {
+      if (!network::is_connected())
+        return;
+      this->web_server_->init();
+      this->cancel_interval("http");
+    });
   }
 #endif
   // Below the main loop's priority, on either core: it only drains the buffer.
