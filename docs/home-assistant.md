@@ -1,6 +1,6 @@
 # Home Assistant side
 
-What Home Assistant needs for the Home Assistant configuration ([configurations.md](configurations.md)). With the Traccar configuration, Home Assistant sees the cars through its Traccar Server integration instead, and nothing here applies.
+What Home Assistant needs for the native API configuration (`examples/car-home-assistant.yaml`, [configurations.md](configurations.md)). With the Traccar configuration, Home Assistant sees the cars through its Traccar Server integration; with the Home Assistant integration configuration, through the [Freematics integration](https://github.com/raetha/ha-freematics), whose README covers its setup. Nothing here applies to either.
 
 ## Adding the dongle
 

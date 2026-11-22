@@ -80,7 +80,7 @@ class Tracker {
   }
 
   // Time passing without a fix (no signal, GNSS off). A heartbeat without a
-  // location keeps the device alive in Traccar while parked.
+  // location shows the server the device is alive while parked.
   Decision on_tick(uint32_t now) {
     if (this->moving_ || this->config_.heartbeat_s == 0)
       return Decision::NONE;

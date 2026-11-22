@@ -1,5 +1,5 @@
 #pragma once
-// The records waiting for Traccar's acknowledgement: in memory and, optionally,
+// The records waiting for the server's acknowledgement: in memory and, optionally,
 // in a store that survives restarts (a file on an SD card, file_queue). With a
 // store, the store holds every waiting record and memory holds the oldest of
 // them, the next to send; without one, memory is all there is. If the store
@@ -82,7 +82,7 @@ template<typename Store> class Backlog {
     return result;
   }
 
-  /// Traccar acknowledged the n oldest records.
+  /// The server acknowledged the n oldest records.
   void acknowledged(size_t n) {
     n = std::min(n, this->memory_.size());
     this->memory_.pop_front(n);

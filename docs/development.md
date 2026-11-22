@@ -7,13 +7,14 @@
 | `packages/freematics-oneplus-b.yaml` | The board package every device config pulls in; its `esphome: project: version` is the release version |
 | `packages/wifi-first.yaml`, `packages/uplink-*.yaml` | Wi-Fi first; one uplink package per configuration ([configurations.md](configurations.md)) |
 | `components/freematics_link/` | The co-processor link component (GNSS, battery voltage, version, a time source); `link_parse.h` is plain C++, tested on the host |
-| `components/tracker_uplink/` | The Traccar uplink component; `teltonika.h` and `tracker.h` are plain C++ with no ESPHome dependencies, tested on the host |
+| `components/tracker_uplink/` | The uplink component, to Traccar or Home Assistant's webhook (`webhook.cpp`, ESP-IDF's HTTP client in a task of its own); `teltonika.h`, `compact.h`, `tracker.h` and `backlog.h` are plain C++ with no ESPHome dependencies, tested on the host |
+| `components/sd_card/`, `components/file_queue/`, `components/file_logger/` | Generic: the microSD card, a fixed-record file queue that survives resets, the log written to a file |
 | `examples/` | A complete device config per configuration, pasteable on its own: packages and components come from GitHub (`url:`, `github://`), never `!include`. CI builds each from the checkout instead (`scripts/localize.py`) with `examples/secrets.example.yaml` |
 | `docs/plan.md` | Status, decisions, phases and open questions: keep it current |
 | `docs/hardware.md`, `docs/networking.md` | Hardware facts and sources; Wi-Fi/LTE/WireGuard and data use |
 | `docs/backlog.md`, `docs/audits.md` | Ideas set aside; review records |
-| `scripts/release.py`, `scripts/markdown.py`, `scripts/localize.py` | CI's changelog, version, test build and release-notes helpers; the Markdown line check; an example rewritten to use this checkout |
-| `tests/` | Tests for the scripts and workflows, `test_freematics_link.py`, which checks the co-processor reply parsing, and `test_tracker_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoder against a mirror of Traccar's decoder, the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
+| `scripts/release.py`, `scripts/markdown.py`, `scripts/localize.py`, `scripts/example_settings.py` | CI's changelog, version, test build and release-notes helpers; the Markdown line check; an example rewritten to use this checkout; the examples' list of optional settings |
+| `tests/` | Tests for the scripts and workflows, `test_freematics_link.py`, which checks the co-processor reply parsing, and `test_tracker_uplink.py`, which builds `tests/cpp/codec_cli.cpp` with the host's C++ compiler and checks the encoders against a mirror of Traccar's decoder and a copy of the Home Assistant integration's (`tests/compact.py`), the tracking filter and the record queue; `tests/components/` holds ESPHome-style component test configs |
 | `.clang-format`, `.clang-tidy` | ESPHome's C++ rules, copied from esphome/esphome |
 
 ## Setup and testing

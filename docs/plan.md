@@ -4,7 +4,7 @@ Where the project stands, what's decided, and what comes next. Keep this current
 
 ## Status
 
-**Phases 1 to 3 work on the owner's dongle (as of 2026-11-20):** GPS to Traccar over Wi-Fi and LTE (SIM7070G, acknowledged), Wi-Fi first, records and logs on the SD card (a drive's records delivered after the fact). Sleep while parked, with motion wake, is built and goes into the car for its first weekend; vehicle data (phase 4) has a listening test built and nothing that sends. The Home Assistant configuration compiles but hasn't been tried. Two configurations: Traccar (the low-data one, the owner's choice) and Home Assistant ([configurations.md](configurations.md)). The dongles have SIM7070G modules on Hologram (APN `hologram`), which is pay as you go: the stock telelogger's 10 to 15 KB on a typical day is the benchmark.
+**Phases 1 to 3 work on the owner's dongles (as of 2026-11-21):** GPS to Traccar over Wi-Fi and LTE (SIM7070G, acknowledged), Wi-Fi first with a search back-off, records and logs on the SD card, sleep while parked (OBD or USB power) with motion wake, trips started only after the motion sensor felt the car move. A day in the Volvo found standby's safe-mode wakes (fixed the same evening). The Home Assistant integration configuration (compact batches to a webhook, raetha/ha-freematics) is built and goes on one dongle for side-by-side trips with Traccar; the native-API Home Assistant configuration compiles but hasn't been tried. Vehicle data (phase 4) has a listening test built and nothing that sends. The dongles have SIM7070G modules on Hologram (APN `hologram`), pay as you go: the stock telelogger's 10 to 15 KB on a typical day is the benchmark.
 
 ## Goal and requirements
 
@@ -24,16 +24,16 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 ## Decisions
 
 - **Traccar first, over Teltonika GH3000 UDP.** The native API costs far too much data for a pay-as-you-go plan (about 650 KB against 15 KB on a workday). The device sends compact, timestamped, acknowledged records straight to the owner's Traccar; no tunnel, no Home Assistant traffic from the car. GH3000 because it's the densest format Traccar decodes and Traccar acknowledges each packet. (2026-11-19, replacing the earlier native-API-first decision)
-- **The repo keeps every configuration as an example** with its pros, cons and data use ([configurations.md](configurations.md)): Traccar and Home Assistant now, MQTT and a direct compact uplink into HA maybe later. (2026-11-19)
-- **Home Assistant configuration:** the native API dialled from the device (`api: outgoing_connection:`, HA 2026.10+) through WireGuard, not MQTT. (2026-11-19)
+- **The repo keeps every configuration as an example** with its pros, cons and data use ([configurations.md](configurations.md)): Traccar, Home Assistant's integration and Home Assistant's native API now, MQTT maybe later. (2026-11-19, 2026-11-21)
+- **Native API configuration:** the native API dialled from the device (`api: outgoing_connection:`, HA 2026.10+) through WireGuard, not MQTT. (2026-11-19)
 - **Wi-Fi first like the telelogger:** LTE is switched off while a known Wi-Fi network is connected. (2026-11-19)
 - **Data is the top constraint.** Update frequency and triggers follow the telelogger's where they make sense and are all substitutions. Position only while moving; vehicle values (later) once per stop. (2026-11-19)
 - **The vehicle bus is read passively only:** no OBD requests, no writes. Active polling may be tested later, carefully. (2026-11-19)
-- **Replayed sensor values in HA** would be hourly long-term statistics through an HA integration in its own repo (HACS: one integration per repo), if HA ever receives the compact uplink directly. (2026-11-19)
+- **Home Assistant through its own integration** (raetha/ha-freematics, HACS: one integration per repo): the dongle posts compact batches (`compact.h`, about 11 bytes a record) to a webhook per dongle over HTTPS, Nabu Casa's or Home Assistant's own address, never a port opened at home. Home Assistant keeps no back-dated states, so each batch moves the device to its newest record and trips arrive as events with their recorded times; replayed sensor values could become long-term statistics later. The same `tracker_uplink` component serves Traccar and Home Assistant, side by side if wanted. (2026-11-21)
 - **One repo for ESPHome work** (this one, on `dev`); whether generic components move elsewhere is decided later. (2026-11-19)
 - **The examples are paste-and-build**: a device config pasted into ESPHome Device Builder fetches the packages and components from GitHub. (2026-11-19)
 - **Build one piece at a time**, YAML stopgap first, then a component that replaces it.
-- **Sleep while parked is deep sleep**, not the stock firmware's awake standby: the ESP32 sleeps and checks the 12 V voltage and the motion sensor's latched flag once a minute; the module is powered down and the co-processor put in low power. Traccar configuration only for now. (2026-11-20)
+- **Sleep while parked is deep sleep**, not the stock firmware's awake standby: the ESP32 sleeps and checks the 12 V voltage and the motion sensor's latched flag once a minute; the module is powered down and the co-processor put in low power. With Traccar, Home Assistant's integration or both; not the native API configuration, which needs its connection up to be useful. (2026-11-20, 2026-11-21)
 - **Detect hardware variants at run time where possible** (the owner's direction): the co-processor's version and the motion sensor's ID already are; what ESPHome fixes at build time (the modem's pins) stays a substitution. (2026-11-20)
 
 ## Phases
@@ -47,7 +47,7 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 | Component | Does | Status |
 | --- | --- | --- |
-| `tracker_uplink` | Tracking filter (moving, turns, start, stop, heartbeat), in-memory queue, Teltonika GH3000 over UDP with acknowledgements, motion triggers | Works on the dongle (Wi-Fi and LTE, acknowledged) |
+| `tracker_uplink` | Tracking filter (moving, turns, start gated by the motion sensor, stop, heartbeat), queue in memory or on the card, Teltonika GH3000 over UDP with acknowledgements, or compact batches to a Home Assistant webhook over HTTPS; several side by side | Traccar works on the dongles (Wi-Fi and LTE); Home Assistant built, in its first trips |
 | `freematics_link` | Owns the co-processor UART: reset, `ATI` version, `ATGPSON`, `ATGPS` polling into fixes, sensors and a time source, `ATRV` battery voltage; later passive vehicle data | Works on the dongle (GPS, version, standby commands) |
 | `sd_card`, `file_queue` | Generic: mount a microSD card over an ESPHome SPI bus; a first-in, first-out file of fixed-size records that survives resets (two CRC-checked headers). The Traccar uplink keeps every unacknowledged record in one (`packages/sd-traccar.yaml`) | Works on the dongle, opt-in (a drive's 111 records kept and delivered) |
 | `file_logger` | Generic: the device's log written to a file on the card by a task of its own, rotated at a size (`packages/sd-logs.yaml`) | Works on the dongle, opt-in |
@@ -56,18 +56,19 @@ Replace the Freematics telelogger firmware on two ONE+ Model B dongles with ESPH
 
 - [ ] The stock telelogger's serial boot log from one dongle (`TYPE:` and `GNSS:OK(I)` or `OK(E)` lines) to confirm the co-processor version and GNSS path.
 - [ ] Which OBD values matter beyond fuel level?
-- [ ] Does the Traccar server have UDP 5027 (Teltonika) open, and does the device keep its identifier?
-- [ ] Home Assistant configuration only: where the WireGuard server runs, and whether its endpoint works from inside the home network.
+- [ ] Native API configuration only: where the WireGuard server runs, and whether its endpoint works from inside the home network.
 - [ ] Does the co-processor's `ATM1` sniffing run CAN in listen-only (silent) mode, or does it accept `ATCSM1`? Only Freematics can say ([vehicle-data.md](vehicle-data.md)).
 - [ ] What the co-processor can hear passively on each car's OBD port.
 
 ## Log
 
+- 2026-11-21: Clean-up before the side-by-side trips: the uplink component is now `tracker_uplink` (it serves Home Assistant as well as Traccar); standby waits for every uplink before sleeping (a registry of the component's instances replaces `standby_uplink`); the webhook URL is a device setting (`ha_webhook_url`, one secret per dongle), and the optional CI build fills it in (`REQUIRED` in `scripts/localize.py`).
+
 - 2026-11-21: Wi-Fi search back-off (owner's idea): parked, the search stops after `wifi_search_time` (2 minutes) without a known network until the car moves again; each start and wake searches again, and a network that dropped where the car is parked is searched for again after 1, 2, 4, 8 and then every 15 minutes (the owner's addition: an access point restarting). ESPHome itself has no back-off (scan, a hidden-network try for each missing network, a radio reset, about every 8 s).
 
 - 2026-11-21: A day in the Volvo (OBD power, standby, Traccar). Drives and Traccar fine; Wi-Fi at home stable at -54 dB in the garage, and Traccar answers over the home IoT network now. But parked, the dongle woke every 16 minutes and stayed up 10: safe mode, after ten one-minute checks. `clean_rtc()` clears its counter only in memory, written to flash later by ESPHome, which a check wake never reaches; the check now writes it at once (`global_preferences->sync()`). Each cycle was five minutes of safe mode on Wi-Fi alone, then a restart, a cellular connection and ten awake minutes, and the restart's latched motion flag opened the trip gate (one 3-minute drift trip in the garage at 22:27Z). The wake reason ("Woke: ...") is now logged at priority -200, so it reaches the card's log. Also seen: after charging at home the dongle stayed awake two hours (the plug-in hybrid's 12 V stays above 13.2 V while charging, so standby counts the car as on: expected), and once DNS over a fresh cellular connection failed for four minutes before working (watch).
 
-- 2026-11-21: Home Assistant integration uplink (owner's request, to compare with Traccar on one dongle each): `tracker_uplink` gained a `home_assistant` protocol that posts compact batches (`compact.h`: deltas, about 11 bytes a record while driving) to a webhook from a FreeRTOS task (`webhook.cpp`, ESP-IDF's HTTP client, the CMN certificate bundle, TLS session tickets, the connection kept open between batches when the server allows). The component is now `MULTI_CONF`, so Traccar and Home Assistant can run side by side; the board package owns `on_gnss_fix` and each uplink package extends it (`!extend`). The integration is a separate repository, raetha/ha-freematics. Real data use to be measured on Hologram; the docs give estimates. The component's name (`tracker_uplink`) no longer fits both uses: rename before the first release.
+- 2026-11-21: Home Assistant integration uplink (owner's request, to compare with Traccar on one dongle each): `tracker_uplink` gained a `home_assistant` protocol that posts compact batches (`compact.h`: deltas, about 11 bytes a record while driving) to a webhook from a FreeRTOS task (`webhook.cpp`, ESP-IDF's HTTP client, the CMN certificate bundle, TLS session tickets, the connection kept open between batches when the server allows). The component is now `MULTI_CONF`, so Traccar and Home Assistant can run side by side; the board package owns `on_gnss_fix` and each uplink package extends it (`!extend`). The integration is a separate repository, raetha/ha-freematics. Real data use to be measured on Hologram; the docs give estimates.
 
 - 2026-11-21: Standby on USB power (some cars keep a USB socket on with the car off): the device sleeps once the motion sensor has felt nothing for `standby_after` and no trip is under way, and wakes on motion or for the heartbeat; on the OBD port the voltage still decides. `standby_on_usb: "false"` keeps a bench device awake. ESPHome's start-up hints (`flash_chip: winbond`, `sram1_as_iram`) left as they are: they would tie builds to one flash vendor and bootloader for a little IRAM the configs don't need.
 

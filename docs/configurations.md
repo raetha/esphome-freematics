@@ -75,5 +75,5 @@ The native API with `outgoing_connection`: the device dials Home Assistant, so H
 ## Later
 
 - **Traccar and Home Assistant together without extra data:** Home Assistant's Traccar Server integration already shows Traccar's devices, so the Traccar configuration reaches HA at no extra cellular cost.
-- **A compact uplink straight into Home Assistant:** the same batched, timestamped records into a small HA custom integration, which would give the device tracker, live sensors and back-dated statistics without Traccar. Only worth building if Traccar is to go ([plan.md](plan.md)).
-- **MQTT:** not built; it would sit between the two above in data use and adds a broker ([backlog.md](backlog.md)).
+- **Back-dated statistics in the Home Assistant integration:** values from late batches (battery voltage, distance) as long-term statistics ([backlog.md](backlog.md)).
+- **MQTT:** not built; it would sit between the Traccar and native API configurations in data use and adds a broker ([backlog.md](backlog.md)).
