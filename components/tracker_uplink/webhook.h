@@ -27,7 +27,8 @@ class WebhookPoster {
   bool start(const std::string &url, size_t max_body);
   /// Whether a post can be made now.
   bool idle() const { return this->state_.load() == IDLE; }
-  /// Copy the body and post it. False when a post is under way or it's too big.
+  /// Post the body as base64 text (see compact.h). False when a post is under
+  /// way or it's too big.
   bool post(const uint8_t *body, size_t len);
   /// While a post runs, 0; once it's done, its HTTP status, or -1 when there
   /// was no answer; reading a finished result makes the poster idle again.

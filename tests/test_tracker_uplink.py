@@ -594,6 +594,12 @@ def test_compact_round_trip(cli):
     assert [r.altitude for r in got] == [237, 241, None, 230, None]
     assert [r.battery_v for r in got] == [14.1, None, None, 12.6, 12.5]
     assert got[4].latitude is None
+    # As posted: base64 text
+    import base64
+
+    from compact import decode_body
+
+    assert decode_body(base64.b64encode(batch)) == (sequence, got)
 
 
 def test_compact_records_while_driving_are_small(cli):
@@ -631,3 +637,12 @@ def test_compact_stops_when_full(cli):
     from compact import decode as decode_compact
 
     assert len(decode_compact(batch)[1]) == added
+
+
+@pytest.mark.parametrize("data", [b"", b"\x01", b"\x01\x02", b"\xff\x00\x7f", bytes(9)])
+def test_base64_matches_python(cli, data):
+    import base64
+
+    out = cli(f"base64 {data.hex() or '-'}\n")
+    expected = base64.b64encode(data).decode()
+    assert (out[0] if out else "") == expected

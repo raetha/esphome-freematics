@@ -7,6 +7,7 @@
 //   compact <capacity> <sequence> <base_time> <n> then n lines:
 //     <kind> <time> <has_location> <lat> <lon> <speed> <course> <sats> <hdop> <battery_mv> [<altitude> if has == 2]
 //   -> records added, then the hex of the batch
+//   base64 <hex>  -> the base64 text of those bytes
 //   ack <hex> <location_packet_id>  -> accepted count or -1
 //   unix <ddmmyy> <hhmmsscc>        -> Unix seconds
 //   track <moving_speed> <stop_delay> <moving_interval> <turn_angle> <min_turn> <heartbeat> <n>
@@ -57,6 +58,16 @@ int main() {
       for (size_t i = 0; i < len; i++)
         std::printf("%02x", buf[i]);
       std::printf("\n");
+    } else if (!std::strcmp(cmd, "base64")) {
+      char hex[2100];
+      std::scanf("%2099s", hex);
+      uint8_t in[1050];
+      size_t n = std::strlen(hex) / 2;
+      for (size_t i = 0; i < n; i++)
+        std::sscanf(hex + 2 * i, "%2hhx", &in[i]);
+      char out[1400];
+      size_t len = base64_encode(in, n, out);
+      std::printf("%.*s\n", static_cast<int>(len), out);
     } else if (!std::strcmp(cmd, "compact")) {
       unsigned cap, seq, base, n;
       std::scanf("%u %u %u %u", &cap, &seq, &base, &n);

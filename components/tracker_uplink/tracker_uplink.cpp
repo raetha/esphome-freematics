@@ -343,8 +343,9 @@ void TrackerUplink::send_webhook_() {
   this->in_flight_ = true;
   this->in_flight_count_ = count;
   this->sent_at_ = now_ms();
-  this->bytes_sent_ += enc.size();
-  ESP_LOGD(TAG, "Posting %u records in %u bytes", (unsigned) count, (unsigned) enc.size());
+  const size_t sent = ::trackcodec::base64_size(enc.size());
+  this->bytes_sent_ += sent;
+  ESP_LOGD(TAG, "Posting %u records in %u bytes", (unsigned) count, (unsigned) sent);
 #endif
 }
 

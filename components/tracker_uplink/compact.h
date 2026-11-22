@@ -14,6 +14,10 @@
 //   flags:  bits 0-1 the kind (fix, trip start, trip stop, heartbeat),
 //           0x04 POSITION, 0x08 ALTITUDE, 0x10 BATTERY; the rest 0
 //
+// On the wire the batch is base64 text: Home Assistant Cloud relays a webhook's
+// body as a UTF-8 string, which binary doesn't survive (a third more bytes,
+// small beside the HTTPS overhead of each post).
+//
 // The sequence number goes up with each post, from a random start at each
 // boot. Records arrive in time order, so the integration drops records no newer
 // than the last it took: a batch sent again because its answer was lost. No
@@ -56,6 +60,28 @@ inline uint8_t clamp_byte(float v) {
   return static_cast<uint8_t>(std::lround(std::clamp(v, 0.0f, 255.0f)));
 }
 }  // namespace detail
+
+/// The base64 length of n bytes.
+inline constexpr size_t base64_size(size_t n) { return (n + 2) / 3 * 4; }
+
+/// Base64 (RFC 4648, with padding) of in[0..n) into out, which must hold
+/// base64_size(n) characters; returns that size.
+inline size_t base64_encode(const uint8_t *in, size_t n, char *out) {
+  static const char ALPHABET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  size_t o = 0;
+  for (size_t i = 0; i < n; i += 3) {
+    uint32_t v = static_cast<uint32_t>(in[i]) << 16;
+    if (i + 1 < n)
+      v |= static_cast<uint32_t>(in[i + 1]) << 8;
+    if (i + 2 < n)
+      v |= in[i + 2];
+    out[o++] = ALPHABET[(v >> 18) & 0x3F];
+    out[o++] = ALPHABET[(v >> 12) & 0x3F];
+    out[o++] = i + 1 < n ? ALPHABET[(v >> 6) & 0x3F] : '=';
+    out[o++] = i + 2 < n ? ALPHABET[v & 0x3F] : '=';
+  }
+  return o;
+}
 
 class CompactEncoder {
  public:

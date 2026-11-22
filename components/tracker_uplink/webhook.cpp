@@ -6,6 +6,8 @@
 
 #include <esp_crt_bundle.h>
 
+#include "compact.h"
+
 #include "esphome/core/log.h"
 
 namespace esphome::tracker_uplink {
@@ -13,7 +15,8 @@ namespace esphome::tracker_uplink {
 static const char *const TAG = "tracker_uplink.webhook";
 
 bool WebhookPoster::start(const std::string &url, size_t max_body) {
-  this->body_ = std::make_unique<uint8_t[]>(max_body);  // NOLINT(cppcoreguidelines-avoid-c-arrays)
+  this->body_ =
+      std::make_unique<uint8_t[]>(::trackcodec::base64_size(max_body));  // NOLINT(cppcoreguidelines-avoid-c-arrays)
   this->max_body_ = max_body;
   esp_http_client_config_t config{};
   config.url = url.c_str();  // copied by esp_http_client_init
@@ -32,15 +35,14 @@ bool WebhookPoster::start(const std::string &url, size_t max_body) {
   this->client_ = esp_http_client_init(&config);
   if (this->client_ == nullptr)
     return false;
-  esp_http_client_set_header(this->client_, "Content-Type", "application/octet-stream");
+  esp_http_client_set_header(this->client_, "Content-Type", "text/plain");
   return xTaskCreate(WebhookPoster::task_, "webhook", 8192, this, 1, &this->task_handle_) == pdPASS;
 }
 
 bool WebhookPoster::post(const uint8_t *body, size_t len) {
   if (this->state_.load() != IDLE || len > this->max_body_)
     return false;
-  std::memcpy(this->body_.get(), body, len);
-  this->len_ = len;
+  this->len_ = ::trackcodec::base64_encode(body, len, reinterpret_cast<char *>(this->body_.get()));
   this->status_.store(0);
   this->state_.store(QUEUED);
   xTaskNotifyGive(this->task_handle_);

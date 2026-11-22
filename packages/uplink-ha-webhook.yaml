@@ -1,6 +1,7 @@
 # Report to Home Assistant through the Freematics integration
 # (https://github.com/raetha/ha-freematics): records go to a webhook as compact
-# batches over HTTPS (about 11 bytes a record while driving), sent every
+# batches over HTTPS (about 11 bytes a record while driving, sent as base64
+# text: about 15), sent every
 # ha_send_interval and at once on trip starts, stops and heartbeats. Home
 # Assistant answers each batch; until it does, the records stay queued and go
 # out again. See docs/configurations.md.
