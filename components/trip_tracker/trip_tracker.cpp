@@ -25,6 +25,18 @@ void TripTracker::setup() {
   if (this->impact_ != nullptr)
     this->impact_->add_on_state_callback([this](float g) { this->on_impact_(g); });
 #endif
+#ifdef USE_TIME
+  if (this->time_ != nullptr) {
+    // A clock already set at the start ran on through deep sleep or a
+    // restart: the time component reports it as synchronized at once, so it
+    // takes a second report (SNTP's own) to trust it.
+    this->clock_syncs_needed_ = this->time_->now().is_valid() ? 2 : 1;
+    this->time_->add_on_time_sync_callback([this]() {
+      if (this->clock_syncs_needed_ > 0)
+        this->clock_syncs_needed_--;
+    });
+  }
+#endif
 }
 
 void TripTracker::dump_config() {
@@ -59,7 +71,7 @@ bool TripTracker::now(uint32_t *unix) const {
     return true;
   }
 #ifdef USE_TIME
-  if (this->time_ != nullptr) {
+  if (this->time_ != nullptr && this->clock_syncs_needed_ == 0) {
     auto t = this->time_->now();
     if (t.is_valid()) {
       *unix = t.timestamp;

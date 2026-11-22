@@ -138,10 +138,8 @@ SendResult WebhookTransport::poll(uint32_t now) {
   size_t n = this->in_flight_;
   this->in_flight_ = 0;
   this->sequence_++;
-  if (status >= 200 && status < 300) {
-    ESP_LOGD(TAG, "Home Assistant took %u records", (unsigned) n);
+  if (status >= 200 && status < 300)
     return SendResult::ACKED;
-  }
   if (status < 0) {
     ESP_LOGW(TAG, "No answer from Home Assistant (%s); %u records kept", esp_err_to_name(this->poster_.last_error()),
              (unsigned) n);

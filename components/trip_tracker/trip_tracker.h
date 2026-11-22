@@ -98,7 +98,10 @@ class TripTracker : public Component {
   }
 
   bool is_moving() const { return this->detector_.moving(); }
-  /// The time now (Unix seconds), from the last fix or the clock; false when unknown.
+  /// The time now (Unix seconds), from the last fix or the clock once it has
+  /// been set since the start; false when unknown. After deep sleep the clock
+  /// runs on, but its slow oscillator drifts by minutes over a night, so it
+  /// isn't trusted until SNTP or a fix has set it.
   bool now(uint32_t *unix) const;
   /// Loop time of the last fix; 0: none yet.
   uint32_t last_fix_ms() const { return this->last_fix_ms_; }
@@ -148,6 +151,7 @@ class TripTracker : public Component {
   Fix last_fix_{};
   uint32_t last_fix_ms_{0};
   uint32_t last_motion_ms_{0};
+  uint8_t clock_syncs_needed_{1};  // until 0, the clock isn't trusted
   Trigger<> trip_start_trigger_;
   Trigger<> trip_stop_trigger_;
   Trigger<Fix> fix_trigger_;

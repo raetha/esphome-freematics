@@ -23,6 +23,10 @@ struct TripConfig {
 
 enum class Trip : uint8_t { NONE, START, STOP };
 
+/// Seconds from then to now; 0 when the clock has stepped back past then (a
+/// clock corrected after waking from deep sleep).
+inline uint32_t elapsed(uint32_t now, uint32_t then) { return now > then ? now - then : 0; }
+
 class TripDetector {
  public:
   explicit TripDetector(const TripConfig &config = TripConfig()) : config_(config) {}
@@ -44,7 +48,7 @@ class TripDetector {
     if (is_fast)
       this->last_fast_ = now;
     if (!this->moving_) {
-      if (!this->has_anchor_ || now - this->anchored_at_ >= this->config_.reanchor_s)
+      if (!this->has_anchor_ || elapsed(now, this->anchored_at_) >= this->config_.reanchor_s)
         this->anchor_(now, latitude, longitude);
       this->fast_fixes_ = is_fast && this->can_start_ ? this->fast_fixes_ + 1 : 0;
       if (this->fast_fixes_ >= this->config_.start_fixes &&
@@ -55,7 +59,7 @@ class TripDetector {
       }
       return Trip::NONE;
     }
-    if (!is_fast && now - this->last_fast_ >= this->config_.stop_delay_s) {
+    if (!is_fast && elapsed(now, this->last_fast_) >= this->config_.stop_delay_s) {
       this->moving_ = false;
       this->anchor_(now, latitude, longitude);
       return Trip::STOP;

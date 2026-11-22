@@ -38,11 +38,12 @@ class Sampler {
     if (trip == Trip::STOP)
       return this->recorded_(now, course_deg, Decision::STOP);
     if (!moving) {
-      if (this->config_.heartbeat_s && (!this->has_record_ || now - this->last_record_ >= this->config_.heartbeat_s))
+      if (this->config_.heartbeat_s &&
+          (!this->has_record_ || elapsed(now, this->last_record_) >= this->config_.heartbeat_s))
         return this->recorded_(now, course_deg, Decision::HEARTBEAT);
       return Decision::NONE;
     }
-    uint32_t since = now - this->last_record_;
+    uint32_t since = elapsed(now, this->last_record_);
     if (since >= this->config_.moving_interval_s)
       return this->recorded_(now, course_deg, Decision::RECORD);
     if (fast && since >= this->config_.min_turn_interval_s &&
@@ -56,9 +57,9 @@ class Sampler {
   Decision on_tick(uint32_t now, bool moving) {
     if (moving || this->config_.heartbeat_s == 0)
       return Decision::NONE;
-    if (this->has_fix_ && now - this->last_fix_ < 10)
+    if (this->has_fix_ && elapsed(now, this->last_fix_) < 10)
       return Decision::NONE;  // fixes are flowing
-    if (!this->has_record_ || now - this->last_record_ >= this->config_.heartbeat_s) {
+    if (!this->has_record_ || elapsed(now, this->last_record_) >= this->config_.heartbeat_s) {
       this->last_record_ = now;
       this->has_record_ = true;
       return Decision::HEARTBEAT;

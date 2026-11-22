@@ -673,3 +673,26 @@ def test_compact_skips_unknown_extras():
     record = bytes([0x23, 0, 3, 0x49, 1, 2, 0xCA, 2, 7, 7, 0x01, 21])
     (got,) = decode_compact(header + record)[1]
     assert got.temperature == 21
+
+
+def test_a_clock_stepping_back_changes_nothing(cli):
+    """After deep sleep the clock runs fast and SNTP sets it back: no extra
+    heartbeat, and a trip under way doesn't stop."""
+    events = [
+        ("tick", 1000),  # parked: a heartbeat
+        ("tick", 940),  # the clock is set back a minute
+        ("tick", 1001),
+        ("fix", 1100, 30, 90),  # a trip starts
+        ("fix", 1105, 30, 90),
+        ("fix", 1040, 30, 90),  # set back again mid-trip
+        ("fix", 1050, 30, 90),  # interval
+    ]
+    assert track(cli, events) == [
+        "HEARTBEAT",
+        "NONE",
+        "NONE",
+        "START",
+        "NONE",
+        "NONE",
+        "NONE",
+    ]

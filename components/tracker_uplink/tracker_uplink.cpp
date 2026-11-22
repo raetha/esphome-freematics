@@ -161,8 +161,10 @@ void TrackerUplink::loop() {
         size_t n = std::min(this->in_flight_, this->backlog_.memory().size());
         this->backlog_.acknowledged(n);
         this->records_sent_ += n;
-        if (this->transport_->acknowledged())
+        if (this->transport_->acknowledged()) {
           this->last_ack_at_ = now | 1;  // never 0
+          ESP_LOGD(TAG, "%s took %u records", this->transport_->server(), (unsigned) n);
+        }
         break;
       }
       case SendResult::RETRY:
