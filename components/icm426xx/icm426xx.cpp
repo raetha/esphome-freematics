@@ -132,8 +132,9 @@ void ICM426xx::dump_config() {
 static uint32_t since(uint32_t now, uint32_t then) { return static_cast<int32_t>(now - then) > 0 ? now - then : 0; }
 
 void ICM426xx::moved_(uint32_t now) {
-  if (this->last_motion_ms_ == 0 || since(now, this->last_motion_ms_) >= 60000)
+  if (this->last_motion_ms_ == 0 || since(now, this->last_motion_ms_) >= 60000) {
     ESP_LOGV(TAG, "Moved");
+  }
   this->last_motion_ms_ = now | 1;
 #ifdef USE_BINARY_SENSOR
   if (this->motion_sensor_ != nullptr)
