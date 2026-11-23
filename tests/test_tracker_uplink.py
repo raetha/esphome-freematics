@@ -664,6 +664,35 @@ def test_extras_in_every_format(cli):
     assert len(bytes.fromhex(out[1])) == 7 + 3
 
 
+def test_compact_carries_the_identity_on_the_first_record(cli):
+    """Model and firmware version ride on the batch's first record only."""
+    from compact import decode as decode_compact
+
+    t = 1_700_000_000
+    lines = (
+        "identity ONE+_Model_B 0.1.0+ff6a429\n"
+        f"compact 1024 7 {t} 2\n"
+        f"3 {t} 0 0 0 0 0 0 0 12600\n"
+        f"3 {t + 60} 0 0 0 0 0 0 0 12600\n"
+    )
+    out = cli(lines)
+    _, (first, second) = decode_compact(bytes.fromhex(out[1]))
+    assert (first.model, first.firmware) == ("ONE+_Model_B", "0.1.0+ff6a429")
+    assert second.model is None and second.firmware is None
+    # The next batch has none unless set again.
+    out = cli(f"compact 1024 8 {t} 1\n3 {t} 0 0 0 0 0 0 0 12600\n")
+    assert len(bytes.fromhex(out[1])) == 7 + 3
+
+
+def test_compact_cuts_long_identity_text(cli):
+    from compact import decode as decode_compact
+
+    t = 1_700_000_000
+    out = cli(f"identity {'M' * 40} -\ncompact 1024 7 {t} 1\n3 {t} 0 0 0 0 0 0 0 0\n")
+    _, (got,) = decode_compact(bytes.fromhex(out[1]))
+    assert got.model == "M" * 32 and got.firmware is None
+
+
 def test_compact_skips_unknown_extras():
     from compact import decode as decode_compact
 

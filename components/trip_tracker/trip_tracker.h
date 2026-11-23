@@ -80,6 +80,11 @@ class TripTracker : public Component {
 #ifdef USE_TIME
   void set_time(time::RealTimeClock *t) { this->time_ = t; }
 #endif
+  void set_model(const char *model) { this->model_ = model; }
+  void set_firmware(const char *firmware) { this->firmware_ = firmware; }
+  /// The device's model and firmware version ("" when not set).
+  const char *model() const { return this->model_; }
+  const char *firmware() const { return this->firmware_; }
   void add_listener(Listener *l) { this->listeners_.push_back(l); }
 
   /// A valid GNSS fix from any source with these members (a GNSS
@@ -152,6 +157,8 @@ class TripTracker : public Component {
   // and stop only.
   ESPPreferenceObject pref_;
   void save_trip_(bool on);
+  const char *model_{""};
+  const char *firmware_{""};
   Fix last_fix_{};
   uint32_t last_fix_ms_{0};
   uint32_t last_motion_ms_{0};

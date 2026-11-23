@@ -43,6 +43,9 @@ class Transport {
   virtual SendResult poll(uint32_t now) = 0;
   /// Each loop while the network is up: read what the server sent unasked.
   virtual void receive() {}
+  /// The device's model and firmware version, for protocols that carry them
+  /// (strings that live as long as the program).
+  virtual void set_identity(const char *model, const char *firmware) {}
   uint32_t bytes_sent() const { return this->bytes_sent_; }
 
  protected:

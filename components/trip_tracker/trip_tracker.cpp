@@ -77,6 +77,8 @@ void TripTracker::dump_config() {
     ESP_LOGCONFIG(TAG, "  A trip starts only within %" PRIu32 " s of the motion sensor feeling the car move%s",
                   this->start_motion_ms_ / 1000, this->has_motion_sensor() ? "" : " (no motion sensor: GPS alone)");
   }
+  if (this->model_[0] != '\0' || this->firmware_[0] != '\0')
+    ESP_LOGCONFIG(TAG, "  Device: %s, firmware %s", this->model_, this->firmware_);
   ESP_LOGCONFIG(TAG, "  On a trip: %s", YESNO(this->is_moving()));
 }
 

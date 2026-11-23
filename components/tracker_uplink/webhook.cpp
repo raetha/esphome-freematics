@@ -119,12 +119,15 @@ static ::trackcodec::CompactKind compact_kind(uint8_t decision) {
 size_t WebhookTransport::send(const RecordQueue &records, size_t max) {
   ::trackcodec::CompactEncoder enc;
   enc.begin(this->buf_, sizeof(this->buf_), this->sequence_, records.at(0).time);
+  if (!this->identity_sent_)
+    enc.set_identity(this->model_, this->firmware_);
   size_t count = 0;
   while (count < records.size() && count < max && enc.add(records.at(count), compact_kind(records.at(count).kind)))
     count++;
   if (count == 0 || !this->poster_.post(this->buf_, enc.size()))
     return 0;
   this->in_flight_ = count;
+  this->identity_in_flight_ = enc.identity_added();
   const size_t sent = ::trackcodec::base64_size(enc.size());
   this->bytes_sent_ += sent;
   ESP_LOGD(TAG, "Posting %u records in %u bytes", (unsigned) count, (unsigned) sent);
@@ -138,8 +141,11 @@ SendResult WebhookTransport::poll(uint32_t now) {
   size_t n = this->in_flight_;
   this->in_flight_ = 0;
   this->sequence_++;
-  if (status >= 200 && status < 300)
+  if (status >= 200 && status < 300) {
+    if (this->identity_in_flight_)
+      this->identity_sent_ = true;
     return SendResult::ACKED;
+  }
   if (status < 0) {
     ESP_LOGW(TAG, "No answer from Home Assistant (%s); %u records kept", esp_err_to_name(this->poster_.last_error()),
              (unsigned) n);

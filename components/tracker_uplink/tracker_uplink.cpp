@@ -22,6 +22,7 @@ void TrackerUplink::setup() {
   this->last_tick_ = now_ms();
   if (!this->transport_->setup(this->batch_max_))
     this->mark_failed();
+  this->transport_->set_identity(this->parent_->model(), this->parent_->firmware());
 }
 
 void TrackerUplink::dump_config() {

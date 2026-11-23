@@ -31,6 +31,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - Bench tests, each pasted over the config for one install (docs/bench-tests.md): `bench-modem-probe.yaml` talks to the cellular module the way Freematics' library does and logs everything it answers; `bench-obd-listen.yaml` listens to the OBD port for one minute without sending anything to the car, the first step towards vehicle data.
 - A WireGuard tunnel home for the Traccar and Home Assistant integration configurations (`packages/wireguard.yaml`), up only on chosen networks: any Wi-Fi or those named in `wireguard_ssids`, and cellular if asked for. It lets ESPHome Device Builder update a dongle parked on another Wi-Fi network, or the integration's webhook stay off the internet.
 - One log level for the device, the SD card's log and the co-processor link (`logger_level`, INFO by default): INFO says what happened (trips, what each server took, networks coming and going, sleep and waking) without filling the card; DEBUG adds the detail to troubleshoot.
+- The Home Assistant integration learns each dongle's model and firmware version (`trip_tracker: model:`, ONE+ Model B in the board package; the version is the package's with the commit it was built from, such as `0.1.0+ff6a429`): sent once per boot on the first webhook batch, about 30 bytes.
 
 ### Internal
 

@@ -17,7 +17,9 @@
 //             length byte, then that many bytes), so a reader skips the ones it
 //             doesn't know. Extras so far: 1 temperature (int8, deg C),
 //             2 cellular signal (int8, dBm), 3 impact (uint8, peak in 0.1 g),
-//             4 next report within (uint16, minutes: the dongle goes to sleep)
+//             4 next report within (uint16, minutes: the dongle goes to sleep),
+//             5 model and 6 firmware version (text: on the first record of a
+//             batch until one with them has been acknowledged, once per boot)
 //   flags:  bits 0-1 the kind (fix, trip start, trip stop, heartbeat),
 //           0x04 POSITION, 0x08 ALTITUDE, 0x10 BATTERY, 0x20 EXTRAS; the rest 0
 //
@@ -35,6 +37,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 #include "teltonika.h"
 
@@ -51,6 +54,9 @@ static constexpr uint8_t EXTRA_TEMPERATURE = 0x01;  // 1 byte
 static constexpr uint8_t EXTRA_SIGNAL = 0x02;       // 1 byte
 static constexpr uint8_t EXTRA_IMPACT = 0x03;       // 1 byte
 static constexpr uint8_t EXTRA_NEXT_REPORT = 0x44;  // 2 bytes (id 4)
+static constexpr uint8_t EXTRA_MODEL = 0xC5;        // text (id 5)
+static constexpr uint8_t EXTRA_FIRMWARE = 0xC6;     // text (id 6)
+static constexpr size_t EXTRA_TEXT_MAX = 32;        // longer text is cut
 
 // Record kinds (Record::kind holds the tracker's Decision; these are the wire values).
 enum CompactKind : uint8_t { COMPACT_FIX = 0, COMPACT_START = 1, COMPACT_STOP = 2, COMPACT_HEARTBEAT = 3 };
@@ -116,9 +122,18 @@ class CompactEncoder {
     return true;
   }
 
+  /// Carry the device's model and firmware version (either may be empty) on
+  /// the next record added.
+  void set_identity(const char *model, const char *firmware) {
+    this->model_ = model;
+    this->firmware_ = firmware;
+  }
+  /// Whether a record added so far carried them.
+  bool identity_added() const { return this->identity_added_; }
+
   /// Add a record of the given kind. Returns false, writing nothing, when it doesn't fit.
   bool add(const Record &r, CompactKind kind) {
-    uint8_t tmp[40];
+    uint8_t tmp[40 + 2 * (2 + EXTRA_TEXT_MAX)];
     size_t n = 1;
     uint8_t flags = kind & 0x03;
     // Records are in time order; a clock that stepped back counts as no time.
@@ -168,6 +183,18 @@ class CompactEncoder {
       tmp[n++] = static_cast<uint8_t>(r.next_report_min >> 8);
       extras++;
     }
+    bool identity = false;
+    for (auto [tag, text] : {std::pair{EXTRA_MODEL, this->model_}, std::pair{EXTRA_FIRMWARE, this->firmware_}}) {
+      if (text == nullptr || text[0] == '\0')
+        continue;
+      size_t len = std::min(std::strlen(text), EXTRA_TEXT_MAX);
+      tmp[n++] = tag;
+      tmp[n++] = static_cast<uint8_t>(len);
+      std::memcpy(tmp + n, text, len);
+      n += len;
+      extras++;
+      identity = true;
+    }
     if (extras > 0) {
       flags |= COMPACT_EXTRAS;
       tmp[count_at] = extras;
@@ -179,6 +206,10 @@ class CompactEncoder {
       return false;
     std::memcpy(this->p_, tmp, n);
     this->p_ += n;
+    if (identity) {
+      this->model_ = this->firmware_ = nullptr;
+      this->identity_added_ = true;
+    }
     if (r.time > this->time_)
       this->time_ = r.time;
     if (r.has_location) {
@@ -200,6 +231,9 @@ class CompactEncoder {
   int32_t lat_{0};
   int32_t lon_{0};
   int32_t alt_{0};
+  const char *model_{nullptr};
+  const char *firmware_{nullptr};
+  bool identity_added_{false};
 };
 
 }  // namespace trackcodec

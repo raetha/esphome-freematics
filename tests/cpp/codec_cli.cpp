@@ -7,6 +7,7 @@
 //   compact <capacity> <sequence> <base_time> <n> then n lines:
 //     <kind> <time> <has_location> <lat> <lon> <speed> <course> <sats> <hdop> <battery_mv> [<altitude> if has == 2]
 //   -> records added, then the hex of the batch
+//   identity <model> <firmware>  -> nothing; the next compact batch carries them ("-": none)
 //   extras <has_temperature> <temperature_c> <signal_dbm> <impact_dg> <next_report_min>
 //     -> nothing; every record after it (packet, compact, freematics) carries these
 //   base64 <hex>  -> the base64 text of those bytes
@@ -31,6 +32,8 @@
 
 using namespace trackcodec;
 
+static const char *identity_model = "";
+static const char *identity_firmware = "";
 static Record g_extras{};
 
 static void with_extras(Record &r) {
@@ -90,12 +93,19 @@ int main() {
       char out[1400];
       size_t len = base64_encode(in, n, out);
       std::printf("%.*s\n", static_cast<int>(len), out);
+    } else if (!std::strcmp(cmd, "identity")) {
+      static char model[64], firmware[64];
+      std::scanf("%63s %63s", model, firmware);
+      identity_model = std::strcmp(model, "-") ? model : "";
+      identity_firmware = std::strcmp(firmware, "-") ? firmware : "";
     } else if (!std::strcmp(cmd, "compact")) {
       unsigned cap, seq, base, n;
       std::scanf("%u %u %u %u", &cap, &seq, &base, &n);
       uint8_t buf[2048];
       CompactEncoder enc;
       enc.begin(buf, cap < sizeof(buf) ? cap : sizeof(buf), static_cast<uint16_t>(seq), base);
+      enc.set_identity(identity_model, identity_firmware);
+      identity_model = identity_firmware = "";
       unsigned added = 0;
       bool full = false;
       for (unsigned i = 0; i < n; i++) {

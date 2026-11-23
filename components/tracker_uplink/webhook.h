@@ -65,9 +65,18 @@ class WebhookTransport final : public Transport {
   bool ready() override { return this->poster_.idle(); }
   size_t send(const RecordQueue &records, size_t max) override;
   SendResult poll(uint32_t now) override;
+  void set_identity(const char *model, const char *firmware) override {
+    this->model_ = model;
+    this->firmware_ = firmware;
+  }
 
  protected:
   std::string url_;
+  // Sent on batches until one carrying them is acknowledged: once per boot.
+  const char *model_{nullptr};
+  const char *firmware_{nullptr};
+  bool identity_sent_{false};
+  bool identity_in_flight_{false};
   WebhookPoster poster_;
   uint16_t sequence_{0};
   size_t in_flight_{0};

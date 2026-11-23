@@ -1,11 +1,15 @@
 """One car's trips: when one starts and stops, decided once from GNSS fixes and
 the motion sensor, for every uplink (tracker_uplink) that reports them."""
 
+import subprocess
+from pathlib import Path
+
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
 from esphome.components import binary_sensor, sensor, time
-from esphome.const import CONF_ID, CONF_TEMPERATURE, CONF_TIME_ID
+from esphome.const import CONF_ID, CONF_MODEL, CONF_TEMPERATURE, CONF_TIME_ID
+from esphome.core import CORE
 
 DOMAIN = "trip_tracker"
 CODEOWNERS = ["@raetha"]
@@ -24,6 +28,7 @@ CONF_ON_TRIP_START = "on_trip_start"
 CONF_ON_TRIP_STOP = "on_trip_stop"
 CONF_ON_FIX = "on_fix"
 CONF_ON_IMPACT = "on_impact"
+CONF_FIRMWARE_VERSION = "firmware_version"
 
 trip_tracker_ns = cg.esphome_ns.namespace("trip_tracker")
 TripTracker = trip_tracker_ns.class_("TripTracker", cg.Component)
@@ -58,6 +63,11 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_SIGNAL): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_IMPACT): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_TIME_ID): cv.use_id(time.RealTimeClock),
+        # Who the device is, for uplinks whose protocol carries it (the
+        # webhook's, once per boot). The version defaults to the project's
+        # (esphome: project: version) and the commit it was built from.
+        cv.Optional(CONF_MODEL): cv.All(cv.string, cv.Length(max=32)),
+        cv.Optional(CONF_FIRMWARE_VERSION): cv.All(cv.string, cv.Length(max=32)),
         cv.Optional(CONF_ON_TRIP_START): automation.validate_automation({}),
         cv.Optional(CONF_ON_TRIP_STOP): automation.validate_automation({}),
         cv.Optional(CONF_ON_FIX): automation.validate_automation({}),
@@ -93,6 +103,11 @@ async def to_code(config):
             cg.add(setter(await cg.get_variable(config[key])))
     if CONF_TIME_ID in config:
         cg.add(var.set_time(await cg.get_variable(config[CONF_TIME_ID])))
+    if CONF_MODEL in config:
+        cg.add(var.set_model(config[CONF_MODEL]))
+    firmware = config.get(CONF_FIRMWARE_VERSION, _firmware_version())
+    if firmware:
+        cg.add(var.set_firmware(firmware))
     for conf in config.get(CONF_ON_TRIP_START, []):
         await automation.build_automation(var.get_trip_start_trigger(), [], conf)
     for conf in config.get(CONF_ON_TRIP_STOP, []):
@@ -103,6 +118,35 @@ async def to_code(config):
         await automation.build_automation(
             var.get_impact_trigger(), [(cg.float_, "peak_g")], conf
         )
+
+
+def _firmware_version() -> str:
+    """The project's version, with the commit of this component's checkout as
+    semver build metadata ("0.1.0+ff6a429"; "-dirty" with local changes);
+    "" without a project version."""
+    version = CORE.config.get("esphome", {}).get("project", {}).get("version", "")
+    if not version:
+        return ""
+    here = Path(__file__).resolve().parent
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(here), "log", "-1", "--format=%h"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(here), "diff", "--quiet", "HEAD", "--", "."],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        ).returncode
+    except (OSError, subprocess.SubprocessError):
+        return version
+    if not commit:
+        return version
+    return f"{version}+{commit}{'-dirty' if dirty else ''}"[:32]
 
 
 @automation.register_condition(

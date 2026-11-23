@@ -344,6 +344,7 @@ sensor:
 # starts, stops and heartbeats; an impact is reported at once.
 trip_tracker:
   id: trips
+  model: ONE+ Model B             # sent to Home Assistant once per boot, with the firmware version
   moving_speed: ${trip_moving_speed}
   start_fixes: ${trip_start_fixes}
   start_distance: ${trip_start_distance}
