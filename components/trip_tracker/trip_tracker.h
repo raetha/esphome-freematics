@@ -148,6 +148,10 @@ class TripTracker : public Component {
 #ifdef USE_TIME
   time::RealTimeClock *time_{nullptr};
 #endif
+  // Whether a trip is under way, kept across restarts: written at each start
+  // and stop only.
+  ESPPreferenceObject pref_;
+  void save_trip_(bool on);
   Fix last_fix_{};
   uint32_t last_fix_ms_{0};
   uint32_t last_motion_ms_{0};

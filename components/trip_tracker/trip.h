@@ -41,10 +41,27 @@ class TripDetector {
   /// drift in a garage or a house never starts one. A trip under way isn't affected.
   void set_can_start(bool can) { this->can_start_ = can; }
 
+  /// Carry on a trip that was under way before a restart: the stop delay
+  /// counts from the first fix after it, so a car still parked gets its stop.
+  void resume() {
+    this->moving_ = true;
+    this->fast_fixes_ = 0;
+    this->resume_pending_ = true;
+  }
+  /// End a resumed trip that no fix came for: there is nothing to stop it at.
+  void abandon() {
+    this->moving_ = false;
+    this->resume_pending_ = false;
+  }
+
   /// A valid fix at time now (Unix seconds). Without a position (NaN), only
   /// the speed decides a trip's start.
   Trip on_fix(uint32_t now, float speed_kmh, float latitude = NAN, float longitude = NAN) {
     bool is_fast = this->fast(speed_kmh);
+    if (this->resume_pending_) {
+      this->resume_pending_ = false;
+      this->last_fast_ = now;
+    }
     if (is_fast)
       this->last_fast_ = now;
     if (!this->moving_) {
@@ -90,6 +107,7 @@ class TripDetector {
   TripConfig config_;
   bool moving_{false};
   bool can_start_{true};
+  bool resume_pending_{false};
   uint8_t fast_fixes_{0};
   uint32_t last_fast_{0};
   bool has_anchor_{false};

@@ -15,6 +15,7 @@
 //   track <moving_speed> <stop_delay> <moving_interval> <turn_angle> <min_turn> <heartbeat> <n>
 //     then n lines: fix <time> <speed> <course> | at <time> <speed> <course> <lat> <lon> | tick <time>
 //       | car <time> <0|1> (whether a trip may start; prints NONE)
+//       | resume <time> (a trip was under way before a restart; prints NONE)
 //   -> one decision per line: NONE RECORD START STOP HEARTBEAT
 //   queue <capacity> <n> then n ops: push <time> | pop <count> | erase <index>
 //   -> after each op: the record times in order, or "-" when empty, and "full" when full
@@ -189,6 +190,9 @@ int main() {
           float speed, course, lat, lon;
           std::scanf("%f %f %f %f", &speed, &course, &lat, &lon);
           d = tr.on_fix(t, speed, course, lat, lon);
+        } else if (!std::strcmp(kind, "resume")) {
+          tr.resume();
+          d = Decision::NONE;
         } else if (!std::strcmp(kind, "car")) {
           unsigned on;
           std::scanf("%u", &on);

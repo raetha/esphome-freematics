@@ -38,7 +38,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 
 - The components meant for other boards (SD card, file queue and logger, motion sensor, trips and uplinks) name nothing specific to this dongle, ready to move to a repository of their own and then to ESPHome once the project is stable.
 
-- Trips are decided by a `trip_tracker` component, once for every uplink; each `tracker_uplink` sends through a transport per protocol (Teltonika and Freematics over UDP, the webhook), so a new protocol is a class and a schema entry; the motion sensor is an `icm426xx` component instead of YAML lambdas, with its motion analysis tested on the host.
+- Trips are decided by a `trip_tracker` component, once for every uplink; each `tracker_uplink` sends through a transport per protocol (Teltonika and Freematics over UDP, the webhook), so a new protocol is a class and a schema entry; the motion sensor is an `icm426xx` component instead of YAML lambdas, with its motion analysis tested on the host. A trip under way survives a restart (unplugged, a crash, an update): once the car has been still for the stop delay after the first fix, its stop is reported to every uplink as usual; with no fix at all it ends unreported.
 
 - The host tests build the components' plain C++ as C++20, as ESPHome builds the firmware.
 - A simulated day through the tracking filter and encoder checks the data estimates (`tests/test_simulation.py`).

@@ -105,6 +105,7 @@ class Tracker {
   explicit Tracker(const TrackerConfig &config = TrackerConfig()) : trip_(config), sampler_(config) {}
   bool moving() const { return this->trip_.moving(); }
   void set_can_start(bool can) { this->trip_.set_can_start(can); }
+  void resume() { this->trip_.resume(); }
   Decision on_fix(uint32_t now, float speed_kmh, float course_deg, float latitude = NAN, float longitude = NAN) {
     Trip trip = this->trip_.on_fix(now, speed_kmh, latitude, longitude);
     return this->sampler_.on_fix(now, course_deg, trip, this->trip_.moving(), this->trip_.fast(speed_kmh));

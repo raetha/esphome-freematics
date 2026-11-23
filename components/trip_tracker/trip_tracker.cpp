@@ -3,7 +3,10 @@
 #include <algorithm>
 
 #include "esphome/core/application.h"
+#include "esphome/core/hal.h"
+#include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
+#include "esphome/core/preferences.h"
 
 namespace esphome::trip_tracker {
 
@@ -12,6 +15,26 @@ static const char *const TAG = "trip_tracker";
 static uint32_t now_ms() { return App.get_loop_component_start_time(); }
 
 void TripTracker::setup() {
+  // A trip under way when the device restarted (unplugged, a crash, an
+  // update) goes on: once the car has been still for the stop delay after the
+  // first fix, its stop is reported as usual. Without that, the stop would
+  // never come.
+  this->pref_ = global_preferences->make_preference<uint8_t>(fnv1_hash("trip_tracker"));
+  uint8_t on = 0;
+  if (this->pref_.load(&on) && on == 1) {
+    this->detector_.resume();
+    uint32_t delay_s = this->detector_.config().stop_delay_s;
+    ESP_LOGI(TAG, "A trip was under way before the restart: it goes on until the car has been still for %" PRIu32 " s",
+             delay_s);
+    // No fix at all (a garage) leaves nowhere to stop it: it ends unreported.
+    this->set_timeout("resume", delay_s * 1000, [this]() {
+      if (this->last_fix_ms_ == 0 && this->detector_.moving()) {
+        ESP_LOGW(TAG, "No GPS fix since the restart: the trip from before it ends without a stop report");
+        this->detector_.abandon();
+        this->save_trip_(false);
+      }
+    });
+  }
 #ifdef USE_BINARY_SENSOR
   if (this->motion_ != nullptr) {
     // On while the car is being moved: both edges mark movement (off comes a
@@ -116,11 +139,20 @@ void TripTracker::process_fix_(Fix fix) {
     l->on_trip_fix(fix, trip, moving, fast);
   if (trip == Trip::START) {
     ESP_LOGI(TAG, "Trip started");
+    this->save_trip_(true);
     this->trip_start_trigger_.trigger();
   } else if (trip == Trip::STOP) {
     ESP_LOGI(TAG, "Trip stopped");
+    this->save_trip_(false);
     this->trip_stop_trigger_.trigger();
   }
+}
+
+void TripTracker::save_trip_(bool on) {
+  uint8_t v = on ? 1 : 0;
+  this->pref_.save(&v);
+  // Written at once (twice a trip): a restart soon after must still find it.
+  global_preferences->sync();
 }
 
 void TripTracker::note_(uint8_t impact_dg, uint16_t next_report_min) {
