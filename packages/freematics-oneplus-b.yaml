@@ -24,6 +24,7 @@ substitutions:
   modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
   modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
+  modem_restart_after: 4min     # restart the module when it answers but hasn't connected this long (a SIM it failed to read stays unread)
   modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
@@ -100,6 +101,7 @@ modem:
   update_interval: 120s
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
+    - script.execute: modem_watchdog
     # The module's first answer after the ESP32 starts, and any answer after
     # three syncs without a connection (a dropped connection counts as three),
     # restart it: after a drop the SIM7070 refuses to start PPP again ("Failed
@@ -139,11 +141,13 @@ modem:
           - modem.send_at: "AT+CFUN=1"
   on_connect:
     - logger.log: "Cellular: PPP up"
+    - script.stop: modem_watchdog
     - globals.set: { id: modem_syncs, value: "0" }
     - script.execute: network_beep
   on_disconnect:
     - logger.log: "Cellular: PPP down"
     - globals.set: { id: modem_syncs, value: "3" }   # restart the module at its next answer
+    - script.execute: modem_watchdog
 
 output:
   - platform: gpio
@@ -177,6 +181,25 @@ binary_sensor:
       internal: true
 
 script:
+  # After a restart the SIM7070 sometimes reports its SIM as not inserted
+  # ("+CPIN: NOT INSERTED") and never reads it again; the modem component
+  # keeps asking without the module answering anew, so the restart on_sync
+  # makes never comes (a whole drive went by like this). A module that has
+  # answered but not connected for modem_restart_after is restarted, and
+  # again each period after (nothing is sent while it isn't connected).
+  - id: modem_watchdog
+    mode: restart
+    then:
+      - delay: ${modem_restart_after}
+      - if:
+          condition:
+            lambda: return id(cell).is_enabled() && !id(cell).is_connected();
+          then:
+            - logger.log:
+                level: WARN
+                format: "Cellular: no connection after ${modem_restart_after}; restarting the module (AT+CFUN=1,1)"
+            - modem.send_at: "AT+CFUN=1,1"
+            - script.execute: modem_watchdog
   # A short beep when Wi-Fi or cellular comes up, at most once in 10 minutes
   # (a network that keeps dropping the device would beep every minute).
   - id: network_beep

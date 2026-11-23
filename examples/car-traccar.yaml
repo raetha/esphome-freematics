@@ -24,6 +24,7 @@ substitutions:
   # modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
   # modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   # modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
+  # modem_restart_after: 4min     # restart the module when it answers but hasn't connected this long (a SIM it failed to read stays unread)
   # modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   # gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   # sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
