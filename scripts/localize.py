@@ -45,6 +45,13 @@ def _blocks(text: str) -> list[tuple[str | None, list[str]]]:
 REQUIRED = {
     "packages/uplink-ha-webhook.yaml": {"ha_webhook_url": "!secret car1_webhook_url"},
     "packages/sd-logs-download.yaml": {"sd_log_password": "!secret car1_log_password"},
+    "packages/wireguard.yaml": {
+        "wireguard_address": "!secret car1_wg_address",
+        "wireguard_private_key": "!secret car1_wg_private_key",
+        "wireguard_peer_endpoint": "!secret wg_endpoint",
+        "wireguard_peer_public_key": "!secret wg_peer_public_key",
+        "wireguard_allowed_ip": "!secret wg_allowed_ip",
+    },
 }
 
 _OPTIONAL = re.compile(r"^\s+#\s*-\s+(packages/\S+\.yaml)\s*$")

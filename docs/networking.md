@@ -18,18 +18,34 @@ ESPHome 2026.11's native API can dial Home Assistant itself (`api: outgoing_conn
 
 ## WireGuard
 
-The dongle opens a WireGuard tunnel home and reaches Home Assistant through it, so nothing at home is exposed to the internet.
+A WireGuard tunnel lets the dongle reach what's at home with nothing at home open to the internet. Three uses:
 
-Device side (`examples/car-home-assistant.yaml`):
+- **The native API configuration** (`examples/car-home-assistant.yaml`) needs it all the time: the dongle dials Home Assistant through it, on Wi-Fi and LTE alike.
+- **The integration's webhook without Home Assistant Cloud:** the webhook address can be Home Assistant's address at home, reached through the tunnel, instead of a cloudhook or a public HTTPS address.
+- **Updates and logs away from home:** ESPHome Device Builder reaches the dongle while it's parked on another Wi-Fi network (an office), so a queued update installs there too.
+
+`packages/wireguard.yaml` adds the tunnel to the Traccar and integration configurations and brings it up only on chosen networks: on Wi-Fi (any network, or only those in `wireguard_ssids`, comma-separated), on cellular (`wireguard_on_cellular`), or both. The defaults are any Wi-Fi and not cellular, which costs no cellular data. It checks every 5 seconds and logs each change ("Tunnel up on this network"). It never restarts the dongle when the tunnel can't connect (`reboot_timeout: 0s`), so a network that blocks WireGuard costs nothing but the tunnel.
+
+Device side (the package's substitutions, or the `wireguard:` block in `examples/car-home-assistant.yaml`):
 
 - `address`: the dongle's tunnel address, one per dongle (for example `10.66.0.11` and `10.66.0.12`).
-- `peer_endpoint`: the home WireGuard server's public name or address; `peer_public_key` and an optional `peer_preshared_key`.
-- `peer_allowed_ips`: only Home Assistant's address (`192.168.1.10/32` in the example). Everything else, SNTP included, goes direct, so the tunnel doesn't depend on itself for the time it needs to start.
-- `peer_persistent_keepalive: 25s`: WireGuard sends it only when nothing else went out in that time, so it costs nothing while the API is busy; it keeps the carrier's NAT mapping open so HA's replies get through.
+- `peer_endpoint`: the home WireGuard server's public name or address; `peer_public_key` and an optional `peer_preshared_key` (with the package, add `wireguard: peer_preshared_key: !secret ...` to the device config).
+- `peer_allowed_ips`: only what must go through the tunnel: Home Assistant's address (`192.168.1.10/32`), or the home network for Device Builder. Everything else, SNTP and Traccar included, goes direct, so the tunnel doesn't depend on itself for the time it needs to start.
+- `peer_persistent_keepalive: 25s`: WireGuard sends it only when nothing else went out in that time, so it costs nothing while traffic flows; it keeps a NAT mapping open so replies get through.
 
-Server side: a WireGuard peer per dongle, its `AllowedIPs` the dongle's `/32`, and a route or NAT from the tunnel to Home Assistant. Any WireGuard server at home works (router, a container, or Home Assistant's WireGuard app).
+Server side: a WireGuard peer per dongle, its `AllowedIPs` the dongle's `/32`, and a route or NAT from the tunnel to Home Assistant. Any WireGuard server at home works (router, a container, or Home Assistant's WireGuard app). A server on the router (UniFi's built-in WireGuard VPN server, for one) routes the tunnel's addresses to the home network by itself.
 
-At home on Wi-Fi, HA's address is still routed into the tunnel, so the endpoint must also work from inside the home network: either the router supports NAT loopback (hairpin), or the endpoint's name resolves to the server's LAN address at home (split DNS). Phase 1 checks this.
+When the tunnel is up at home on Wi-Fi, home addresses go into it, so the endpoint must also work from inside the home network: either the router supports NAT loopback (hairpin), or the endpoint's name resolves to the server's LAN address at home (split DNS). Leaving the home network out of `wireguard_ssids` avoids the question, but then Device Builder can't use the tunnel address at home (below).
+
+### Updates from Device Builder through the tunnel
+
+Device Builder finds devices by mDNS, which doesn't cross a tunnel. To update a dongle parked on another network:
+
+- In the device config, `wifi: use_address:` set to the dongle's tunnel address, so Device Builder sends updates there. It then always uses that address, so the tunnel must be up wherever updates should work, home included: list the home network in `wireguard_ssids` too, or leave it empty for any Wi-Fi.
+- In the Device Builder app's settings, check devices' status by ping instead of mDNS, so it sees the dongle come online through the tunnel and installs a queued update. This applies to every device it manages.
+- The tunnel's `peer_allowed_ips` must include Home Assistant's address (where Device Builder runs), and the server must route the tunnel's addresses back to it.
+
+Not yet tried on the owner's dongles: a network that blocks UDP (some corporate Wi-Fi) leaves the tunnel down, and the dongle reports as usual without it.
 
 ## Data use
 

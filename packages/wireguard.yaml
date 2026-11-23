@@ -1,0 +1,70 @@
+# A WireGuard tunnel home, on chosen networks only: on Wi-Fi (any network, or
+# only those named in wireguard_ssids), on cellular, or both. Through it the
+# dongle reaches what's at home without anything at home being open to the
+# internet: Home Assistant's webhook without Home Assistant Cloud, or ESPHome
+# Device Builder's updates and logs while parked on another Wi-Fi (an office).
+# Only the addresses in wireguard_allowed_ip go through it; Traccar reports and
+# everything else go direct. docs/networking.md -> "WireGuard" has the server
+# side and the Device Builder settings.
+#
+# Substitutions a device config must set, each from a secret of its own:
+# wireguard_address (this dongle's tunnel address), wireguard_private_key,
+# wireguard_peer_endpoint (the server's public name or address),
+# wireguard_peer_public_key and wireguard_allowed_ip (what goes through the
+# tunnel: Home Assistant's address, or the home network). A preshared key goes
+# in the device config: wireguard: peer_preshared_key: !secret ...
+
+substitutions:
+  # wireguard_address: !secret car1_wg_address        # required with wireguard.yaml: this dongle's tunnel address, e.g. 10.66.0.11
+  # wireguard_private_key: !secret car1_wg_private_key  # required with wireguard.yaml: this dongle's private key
+  # wireguard_peer_endpoint: !secret wg_endpoint      # required with wireguard.yaml: the home server's public name or address
+  # wireguard_peer_public_key: !secret wg_peer_public_key  # required with wireguard.yaml: the home server's public key
+  # wireguard_allowed_ip: !secret wg_allowed_ip       # required with wireguard.yaml: what goes through the tunnel, e.g. 192.168.1.0/24
+  wireguard_on_wifi: "true"       # tunnel up on Wi-Fi
+  wireguard_ssids: ""             # only on these Wi-Fi networks, comma-separated ("home,office"); "": any
+  wireguard_on_cellular: "false"  # tunnel up on cellular too (a handshake about every 2 minutes while it carries traffic)
+
+wireguard:
+  id: tunnel
+  time_id: sntp_time
+  address: ${wireguard_address}
+  private_key: ${wireguard_private_key}
+  peer_endpoint: ${wireguard_peer_endpoint}
+  peer_public_key: ${wireguard_peer_public_key}
+  peer_allowed_ips:
+    - ${wireguard_allowed_ip}
+  peer_persistent_keepalive: 25s  # sent only when nothing else was; keeps a NAT mapping open for replies
+  reboot_timeout: 0s              # a network that blocks WireGuard mustn't restart the dongle
+
+interval:
+  # Up or down with the network the dongle is on.
+  - interval: 5s
+    then:
+      - lambda: |-
+          bool want = false;
+          if (wifi::global_wifi_component->is_connected()) {
+            if (${wireguard_on_wifi}) {
+              const char *list = "${wireguard_ssids}";
+              want = list[0] == '\0';
+              char buf[wifi::SSID_BUFFER_SIZE];
+              const char *ssid = wifi::global_wifi_component->wifi_ssid_to(buf);
+              size_t n = strlen(ssid);
+              for (const char *p = list; !want && *p != '\0';) {
+                const char *end = strchr(p, ',');
+                size_t len = end != nullptr ? static_cast<size_t>(end - p) : strlen(p);
+                want = len == n && strncmp(p, ssid, n) == 0;
+                if (end == nullptr)
+                  break;
+                p = end + 1;
+              }
+            }
+          } else if (id(cell).is_connected()) {
+            want = ${wireguard_on_cellular};
+          }
+          if (want != id(tunnel).is_enabled()) {
+            ESP_LOGI("wireguard", "Tunnel %s", want ? "up on this network" : "down: not on a network it's for");
+            if (want)
+              id(tunnel).enable();
+            else
+              id(tunnel).disable();
+          }

@@ -75,6 +75,16 @@ substitutions:
   # standby_motion_mg: "150"      # mg: a change this big between samples wakes it (doors, towing); "0": no motion wake
   # standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
   # standby_stay_awake: 30min     # the "Stay awake" switch turns itself off after this
+
+  # WireGuard tunnel home (wireguard.yaml)
+  # wireguard_address: !secret car1_wg_address        # required with wireguard.yaml: this dongle's tunnel address, e.g. 10.66.0.11
+  # wireguard_private_key: !secret car1_wg_private_key  # required with wireguard.yaml: this dongle's private key
+  # wireguard_peer_endpoint: !secret wg_endpoint      # required with wireguard.yaml: the home server's public name or address
+  # wireguard_peer_public_key: !secret wg_peer_public_key  # required with wireguard.yaml: the home server's public key
+  # wireguard_allowed_ip: !secret wg_allowed_ip       # required with wireguard.yaml: what goes through the tunnel, e.g. 192.168.1.0/24
+  # wireguard_on_wifi: "true"       # tunnel up on Wi-Fi
+  # wireguard_ssids: ""             # only on these Wi-Fi networks, comma-separated ("home,office"); "": any
+  # wireguard_on_cellular: "false"  # tunnel up on cellular too (a handshake about every 2 minutes while it carries traffic)
   # End of the optional settings.
 
 packages:
@@ -93,6 +103,10 @@ packages:
       # - packages/sd-logs-download.yaml
       # Optional: sleep while parked, waking when the car is turned on or moved
       # - packages/standby.yaml
+      # Optional: a WireGuard tunnel home on chosen Wi-Fi networks (or cellular),
+      # for updates from Device Builder away from home (set the wireguard_*
+      # substitutions above)
+      # - packages/wireguard.yaml
       # Also reporting to Traccar: add uplink-traccar.yaml here and its
       # traccar_host and traccar_device_id substitutions above.
 
