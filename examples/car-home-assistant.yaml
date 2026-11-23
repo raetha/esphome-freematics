@@ -93,6 +93,7 @@ api:
 
 ota:
   - platform: esphome
+    id: device_ota                    # standby.yaml holds off sleep during an update
     encryption:                       # uses the API key above
 
 # Tunnel home so Home Assistant stays private. Only HA's address goes through

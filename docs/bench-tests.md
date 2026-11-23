@@ -141,6 +141,7 @@ Add `packages/sd-logs-download.yaml` (after `sd-logs.yaml`) and `sd_log_password
 
 - While the dongle is awake on Wi-Fi, open `http://freematics-eli.local/log` in a browser: it asks for the username (`logs`) and password, then downloads the log. `/log.1` is the file before it (404 until the log has rotated once). The log says "Sent /sdcard/esphome.log over HTTP (N bytes)".
 - In Home Assistant, turn on the dongle's "Stay awake" switch: it stays awake on USB or in a parked car past the usual 10 minutes, and the switch turns itself off after 30 minutes (the log says "Standby: staying awake").
+- Queued update: with the dongle asleep, install to it from Device Builder ("Update queued"). After the next wake on Wi-Fi (move or tap it, or wait for a heartbeat) the update installs; the log says "Standby: an update is under way; not sleeping until it ends", and the dongle doesn't sleep in the middle of it.
 
 **Send back:** how long a 1 MB log takes to download, and whether the dongle kept logging during it.
 

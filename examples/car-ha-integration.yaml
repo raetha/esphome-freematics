@@ -109,6 +109,7 @@ wifi:
 # on Wi-Fi. On LTE the carrier's NAT keeps it unreachable, so neither uses data.
 ota:
   - platform: esphome
+    id: device_ota                    # standby.yaml holds off sleep during an update
     encryption:                       # uses the API key below
 
 # Only so Device Builder can show logs: nothing connects unless a log window is

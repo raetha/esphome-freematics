@@ -16,7 +16,8 @@
 # is under way), and only motion or a heartbeat wakes it; standby_on_usb:
 # "false" keeps it awake on USB (a bench). While it sleeps it can't be updated
 # over Wi-Fi: start the car, move or tap the dongle, or unplug it and plug it
-# back in, and it stays awake for standby_after.
+# back in, and it stays awake for standby_after; or queue the update in
+# Device Builder, which installs it at the next wake on Wi-Fi.
 #
 # It also wakes when the car moves while it sleeps (towing, someone getting
 # in): before sleeping it sets the motion sensor's wake-on-motion, which
@@ -24,6 +25,11 @@
 # sensor is found by its ID at run time: the ICM-42627 (WHO_AM_I 0x20, the
 # Model B's, as Freematics' own driver identifies it). Without a known sensor,
 # the device sleeps as before, waking on voltage and heartbeats only.
+#
+# An update over Wi-Fi (Device Builder, including one it queued for the next
+# time the device is online) holds off sleep until it ends, and a heartbeat
+# wake on Wi-Fi stays up for standby_report_time, so a queued update can find
+# it. Needs the configuration's ota entry to have id: device_ota.
 #
 # A "Stay awake" switch (Home Assistant, through the native API, while the
 # dongle is awake on Wi-Fi) holds off sleep for standby_stay_awake, to update
@@ -72,6 +78,21 @@ globals:
   - id: wake_voltage
     type: float
     initial_value: "NAN"
+  - id: ota_running             # an update is being received: don't sleep
+    type: bool
+    initial_value: "false"
+
+ota:
+  - id: !extend device_ota
+    on_begin:
+      - globals.set: { id: ota_running, value: "true" }
+      - logger.log: "Standby: an update is under way; not sleeping until it ends"
+    on_error:
+      - globals.set: { id: ota_running, value: "false" }
+      - globals.set: { id: parked_s, value: "0" }    # a full wait before sleeping, so it can be tried again
+    on_abort:
+      - globals.set: { id: ota_running, value: "false" }
+      - globals.set: { id: parked_s, value: "0" }
 
 esphome:
   on_boot:
@@ -147,11 +168,15 @@ interval:
       - if:
           condition:
             lambda: |-
-              if (id(enter_standby).is_running() || id(stay_awake).state)
+              if (id(enter_standby).is_running() || id(stay_awake).state || id(ota_running))
                 return false;
+              // A heartbeat wake sleeps once it has reported, but on Wi-Fi it
+              // stays the full standby_report_time, so an update Device
+              // Builder queued for the device can find it (no data on Wi-Fi).
               if (id(heartbeat_wake))
                 return id(parked_s) >= ${standby_report_time} ||
-                       (id(parked_s) >= 60 && id(trips).queued() == 0 && id(trips).all_delivered());
+                       (id(parked_s) >= 60 && !wifi::global_wifi_component->is_connected() &&
+                        id(trips).queued() == 0 && id(trips).all_delivered());
               return id(parked_s) >= ${standby_after};
           then:
             - script.execute: enter_standby
@@ -221,6 +246,12 @@ script:
             - logger.log:
                 format: "Motion wake set (%d mg)"
                 args: ["${standby_motion_mg}"]
+      # An update that began while getting ready to sleep finishes first (it
+      # restarts the device when it succeeds).
+      - wait_until:
+          condition:
+            lambda: return !id(ota_running);
+          timeout: 10min
       - logger.log: "Standby: sleeping"
       - lambda: |-
           // Hold the power key released, the co-processor out of reset and
