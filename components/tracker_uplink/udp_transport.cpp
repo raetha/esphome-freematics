@@ -169,8 +169,9 @@ size_t FreematicsTransport::send(const RecordQueue &records, size_t max) {
   if (!this->login_answered_ ? now - this->last_login_ >= 60000 || this->last_login_ == 0
                              : now - this->last_login_ >= 3600000) {
     size_t len = ::trackcodec::encode_freematics_login(out, sizeof(this->buf_), this->device_id_.c_str(), now);
-    if (len != 0 && this->send_bytes_(this->buf_, len))
+    if (len != 0 && this->send_bytes_(this->buf_, len)) {
       ESP_LOGD(TAG, "Sent a login (%u bytes)", (unsigned) len);
+    }
     this->last_login_ = now | 1;
   }
   size_t count = this->take_(records, max);

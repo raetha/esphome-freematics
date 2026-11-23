@@ -194,9 +194,10 @@ void FileLogger::dump_config() {
                 this->path_, this->is_open_.load() ? "open" : "not open", this->max_size_, this->path_,
                 this->written_.load(), dropped);
 #ifdef USE_FILE_LOGGER_HTTP
-  if (this->web_server_ != nullptr)
+  if (this->web_server_ != nullptr) {
     ESP_LOGCONFIG(TAG, "  Download: http://<device>:%u/log and /log.1, with the web server's password",
                   this->web_server_->get_port());
+  }
 #endif
 }
 

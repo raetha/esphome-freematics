@@ -36,9 +36,10 @@ void TrackerUplink::dump_config() {
                 c.moving_interval_s, c.turn_angle_deg, c.heartbeat_s);
   this->transport_->dump_config();
 #ifdef USE_FILE_QUEUE
-  if (this->store_ != nullptr)
+  if (this->store_ != nullptr) {
     ESP_LOGCONFIG(TAG, "  Records kept on file until delivered (%s)",
                   this->backlog_.stored() ? "ready" : "unavailable");
+  }
 #endif
   // Shown whenever a log viewer connects, so it says how the uplink is doing now.
   ESP_LOGCONFIG(TAG, "  Waiting: %u records; delivered since boot: %" PRIu32 " (%" PRIu32 " bytes sent)",

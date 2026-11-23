@@ -35,6 +35,8 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 
 ### Internal
 
+- No more compiler warnings about empty `if` bodies when building at the default INFO log level.
+
 - The motion sensor's log says "Moved" once a minute at most while moving, as intended (a time 1 ms ahead of the loop's logged every sample), and the co-processor's "OK" before it sleeps is no longer reported as an incomplete reply.
 
 - The examples list the settings an optional package requires (`sd_log_password`, `ha_webhook_url`) among the commented-out settings, with an example value.

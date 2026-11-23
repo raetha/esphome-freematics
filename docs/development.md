@@ -47,7 +47,7 @@ Testing on hardware follows [bench-tests.md](bench-tests.md), one thing per test
 
 ESPHome has no quality scale like Home Assistant's. What it has are the [rules for components](https://developers.esphome.io/contributing/code/) in its developer docs, enforced by its CI, and a [layout for component tests](https://developers.esphome.io/architecture/ci/component_tests/). Every component here meets them, checked before it's merged:
 
-- [ ] **Style:** ESPHome's `.clang-format` and `.clang-tidy` (copied to the repository root; CI runs both, clang-tidy on the plain C++ headers through `tests/cpp/tidy.cpp`), and ruff for the Python.
+- [ ] **Style:** ESPHome's `.clang-format` and `.clang-tidy` (copied to the repository root; CI runs both, clang-tidy on the plain C++ headers through `tests/cpp/tidy.cpp`), and ruff for the Python. An `if`, `for` or `else` whose body is only a log call gets braces: below the build's log level the call compiles to nothing, and GCC warns of an empty body (the examples log at INFO, so `ESP_LOGD`, `ESP_LOGV` and `ESP_LOGCONFIG` all vanish).
 - [ ] **Python:** `DOMAIN` matching the folder name; `CONF_` constants for keys; optional settings optional, with defaults that match the docs; actions that take a bare ID where that's natural (`tracker_uplink.flush: traccar`).
 - [ ] **No blocking:** nothing in `setup()` or `loop()` waits longer than a few milliseconds; network lookups are asynchronous.
 - [ ] **No heap allocation after `setup()`:** queues and buffers are sized from the configuration and allocated once.
