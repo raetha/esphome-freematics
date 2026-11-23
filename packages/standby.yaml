@@ -86,7 +86,7 @@ ota:
   - id: !extend device_ota
     on_begin:
       - globals.set: { id: ota_running, value: "true" }
-      - logger.log: "Standby: an update is under way; not sleeping until it ends"
+      - logger.log: { format: "Standby: an update is under way; not sleeping until it ends", level: INFO }
     on_error:
       - globals.set: { id: ota_running, value: "false" }
       - globals.set: { id: parked_s, value: "0" }    # a full wait before sleeping, so it can be tried again
@@ -190,7 +190,7 @@ switch:
     restore_mode: ALWAYS_OFF
     entity_category: config
     on_turn_on:
-      - logger.log: "Standby: staying awake (${standby_stay_awake} at most)"
+      - logger.log: { format: "Standby: staying awake (${standby_stay_awake} at most)", level: INFO }
       - script.execute: stay_awake_timeout
     on_turn_off:
       - script.stop: stay_awake_timeout
@@ -204,7 +204,7 @@ script:
   - id: enter_standby
     mode: single
     then:
-      - logger.log: "Standby: parked; sending what's waiting, then sleeping"
+      - logger.log: { format: "Standby: parked; sending what's waiting, then sleeping", level: INFO }
       # The next report comes with the next heartbeat wake (or sooner, if the
       # car is started or moved); without heartbeats, nothing is promised.
       - lambda: |-
@@ -252,7 +252,7 @@ script:
           condition:
             lambda: return !id(ota_running);
           timeout: 10min
-      - logger.log: "Standby: sleeping"
+      - logger.log: { format: "Standby: sleeping", level: INFO }
       - lambda: |-
           // Hold the power key released, the co-processor out of reset and
           // the buzzer quiet while the ESP32 sleeps (its pins float otherwise).

@@ -4,6 +4,8 @@ One thing per test, in order: each one either passes or narrows down the next. F
 
 Results so far are in [plan.md](plan.md) → Log.
 
+The log is at INFO unless set otherwise: trips, sends, networks and sleep, with warnings. While testing, set `logger_level: DEBUG` in the device config's substitutions: the live log, the card's log and the co-processor's all follow it.
+
 ## 0. Bring the pasted config up to date
 
 In Device Builder, edit the device and make these changes (everything else stays):

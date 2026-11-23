@@ -32,8 +32,8 @@ substitutions:
   # modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   # gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   # sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
-  # coproc_log_level: DEBUG       # the co-processor link's log; VERBOSE also logs every GPS reply (with logger_level: VERBOSE)
-  # logger_level: DEBUG           # the device's log: DEBUG, VERBOSE, INFO, WARN...
+  # logger_level: INFO            # the device's log: INFO (what happened: trips, sends, networks, sleep), DEBUG (to troubleshoot), VERBOSE, WARN
+  # coproc_log_level: ${logger_level}  # the co-processor link's log; VERBOSE also logs every GPS reply (with logger_level: VERBOSE)
   # motion_threshold: 100mg       # a change this big between motion sensor samples (10 ms apart) counts as the car being moved (a door, getting in, the road)
   # impact_threshold: 4g          # acceleration beyond gravity that counts as an impact, reported at once (0g: none); hard braking is under 1 g
   # gnss_restart: 10min           # no GNSS fix this long: the GNSS is switched off and on again, as the stock firmware does (0s: never)
@@ -58,7 +58,7 @@ substitutions:
   # ha_altitude: "true"               # send altitude (a byte or two per record)
 
   # SD card: log (sd-logs.yaml)
-  # sd_log_level: DEBUG       # what goes into the log on the card
+  # sd_log_level: ${logger_level}  # what goes into the log on the card (at most logger_level)
   # sd_log_max_size: 1MB      # two files at most: 2 MB
 
   # SD card: log download (sd-logs-download.yaml)

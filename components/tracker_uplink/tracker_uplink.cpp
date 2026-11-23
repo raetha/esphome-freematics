@@ -128,7 +128,7 @@ void TrackerUplink::enqueue_(const Record &record) {
       ESP_LOGW(TAG, "Queue full: record dropped");
       break;
   }
-  ESP_LOGD(TAG, "Queued a record for %s (%u waiting%s)", this->transport_->server(), (unsigned) this->backlog_.size(),
+  ESP_LOGV(TAG, "Queued a record for %s (%u waiting%s)", this->transport_->server(), (unsigned) this->backlog_.size(),
            this->backlog_.stored() ? ", on file" : "");
 }
 
@@ -163,7 +163,7 @@ void TrackerUplink::loop() {
         this->records_sent_ += n;
         if (this->transport_->acknowledged()) {
           this->last_ack_at_ = now | 1;  // never 0
-          ESP_LOGD(TAG, "%s took %u records", this->transport_->server(), (unsigned) n);
+          ESP_LOGI(TAG, "%s took %u records", this->transport_->server(), (unsigned) n);
         }
         break;
       }

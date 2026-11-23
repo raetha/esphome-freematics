@@ -38,7 +38,7 @@ wifi:
         condition:
           lambda: return !${lte_on_wifi};
         then:
-          - logger.log: "Wi-Fi up: turning LTE off"
+          - logger.log: { format: "Wi-Fi up: turning LTE off", level: INFO }
           - globals.set: { id: lte_blocked, value: "true" }
           - if:
               condition:
@@ -57,7 +57,7 @@ wifi:
           not:
             wifi.connected:
         then:
-          - logger.log: "Wi-Fi gone: turning LTE on"
+          - logger.log: { format: "Wi-Fi gone: turning LTE on", level: INFO }
           - globals.set: { id: lte_blocked, value: "false" }
           - if:
               condition:
@@ -115,7 +115,7 @@ interval:
                   wifi.connected:
               - lambda: return id(wifi_moving_ms) != 0 && millis() - id(wifi_moving_ms) < 1000;
           then:
-            - logger.log: "Moving: Wi-Fi search paused until the car stops"
+            - logger.log: { format: "Moving: Wi-Fi search paused until the car stops", level: INFO }
             - wifi.disable:
       - if:
           condition:
@@ -149,7 +149,7 @@ interval:
                          now - id(wifi_moving_ms) >= ${wifi_resume_after} * 1000UL &&
                          (id(wifi_retry_ms) == 0 || static_cast<int32_t>(now - id(wifi_retry_ms)) >= 0);
           then:
-            - logger.log: "Still: searching for Wi-Fi again"
+            - logger.log: { format: "Still: searching for Wi-Fi again", level: INFO }
             - lambda: |-
                 id(wifi_search_ms) = millis();
                 id(wifi_retry_ms) = 0;
