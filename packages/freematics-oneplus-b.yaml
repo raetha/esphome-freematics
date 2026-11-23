@@ -18,13 +18,13 @@ substitutions:
   modem_tx_pin: GPIO2           # ...and GPIO33
   beep_on_boot: "true"          # a 200 ms beep when the firmware has started
   beep_on_network: "true"       # a 50 ms beep when Wi-Fi or cellular comes up, as the stock firmware does
-  modem_restart_on_boot: "true" # restart the module the first time it answers after each boot (it keeps power across ESP32 restarts)
+  modem_restart_on_boot: "true" # restart the module the first time it answers after an ESP32 restart it may have stayed on through (not after a power-on or a wake)
   modem_pwrkey_press: 200ms     # the Freematics library's press
   modem_pwrkey_tries: "6"       # presses until the module answers; every third try first switches it off (a stuck module)
   modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
   modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
-  modem_restart_after: 4min     # restart the module when it answers but hasn't connected this long (a SIM it failed to read stays unread)
+  modem_restart_after: 15min    # restart the module when it answers but hasn't connected this long (a safety net: a SIM it failed to read stays unread)
   modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)
@@ -102,11 +102,15 @@ modem:
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
     - script.execute: modem_watchdog
-    # The module's first answer after the ESP32 starts, and any answer after
-    # three syncs without a connection (a dropped connection counts as three),
-    # restart it: after a drop the SIM7070 refuses to start PPP again ("Failed
-    # to enter PPP") until it's restarted, and it keeps power across ESP32
-    # restarts (the board can't cut it). It answers again about 10 s later.
+    # The module's first answer after the ESP32 restarted while the module may
+    # have kept power (an update, a crash, a reboot: the board can't cut it),
+    # and any answer after three syncs without a connection (a dropped
+    # connection counts as three), restart it: after a drop the SIM7070
+    # refuses to start PPP again ("Failed to enter PPP") until it's restarted.
+    # It answers again about 10 s later. Not after a power-on or a wake from
+    # deep sleep (standby powers it down first): our press has just started
+    # it, and restarting it while it's still reading its SIM left it
+    # reporting the SIM as not inserted until the next restart.
     - lambda: |-
         bool first = !id(modem_restarted);
         id(modem_restarted) = true;
@@ -115,7 +119,9 @@ modem:
         if (stuck)
           ESP_LOGW("cellular", "No connection after %u tries: restarting the module", (unsigned) (id(modem_syncs) - 1));
         id(modem_first_sync) = first;
-        id(modem_restart_now) = (first && ${modem_restart_on_boot}) || stuck;
+        esp_reset_reason_t reason = esp_reset_reason();
+        bool fresh = reason == ESP_RST_POWERON || reason == ESP_RST_DEEPSLEEP;
+        id(modem_restart_now) = (first && !fresh && ${modem_restart_on_boot}) || stuck;
         if (id(modem_restart_now))
           id(modem_syncs) = 0;
     - if:
@@ -181,12 +187,12 @@ binary_sensor:
       internal: true
 
 script:
-  # After a restart the SIM7070 sometimes reports its SIM as not inserted
-  # ("+CPIN: NOT INSERTED") and never reads it again; the modem component
-  # keeps asking without the module answering anew, so the restart on_sync
-  # makes never comes (a whole drive went by like this). A module that has
-  # answered but not connected for modem_restart_after is restarted, and
-  # again each period after (nothing is sent while it isn't connected).
+  # A safety net: a module that has answered but not connected for
+  # modem_restart_after is restarted, and again each period after (nothing
+  # is sent while it isn't connected). A SIM7070 that reports its SIM as not
+  # inserted never reads it again, and the modem component keeps asking
+  # without the module answering anew, so the restart on_sync makes never
+  # comes (a whole drive went by like this).
   - id: modem_watchdog
     mode: restart
     then:

@@ -18,13 +18,13 @@ substitutions:
   # modem_tx_pin: GPIO2           # ...and GPIO33
   # beep_on_boot: "true"          # a 200 ms beep when the firmware has started
   # beep_on_network: "true"       # a 50 ms beep when Wi-Fi or cellular comes up, as the stock firmware does
-  # modem_restart_on_boot: "true" # restart the module the first time it answers after each boot (it keeps power across ESP32 restarts)
+  # modem_restart_on_boot: "true" # restart the module the first time it answers after an ESP32 restart it may have stayed on through (not after a power-on or a wake)
   # modem_pwrkey_press: 200ms     # the Freematics library's press
   # modem_pwrkey_tries: "6"       # presses until the module answers; every third try first switches it off (a stuck module)
   # modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
   # modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   # modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
-  # modem_restart_after: 4min     # restart the module when it answers but hasn't connected this long (a SIM it failed to read stays unread)
+  # modem_restart_after: 15min    # restart the module when it answers but hasn't connected this long (a safety net: a SIM it failed to read stays unread)
   # modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   # gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
   # sntp_interval: 12h            # SNTP is the fallback clock; each sync is about 300 bytes over LTE (GPS time is free)

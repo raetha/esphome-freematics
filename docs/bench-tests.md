@@ -82,7 +82,7 @@ Then two starts, with the logs open over Wi-Fi in Device Builder ("Wirelessly"; 
 1. Cold: unplug the dongle for 10 seconds and plug it back in.
 2. Warm: install the same config again over Wi-Fi.
 
-**Look for:** "Cellular: pressing PWRKEY", the modem component starting 8 s later, "restarting the module (AT+CFUN=1,1)" at its first answer, a second sync about 10 s later, then `Cellular: PPP up`, after both starts. "holding PWRKEY 2.5 s" means the module didn't answer and is being switched off and on again. Traffic still goes over Wi-Fi (it's preferred whenever both are up), so this uses almost no cellular data.
+**Look for:** "Cellular: pressing PWRKEY", the modem component starting 8 s later, "restarting the module (AT+CFUN=1,1)" at its first answer only after an update or a restart that kept the module on (not after plugging in or a wake), a second sync about 10 s later in that case, then `Cellular: PPP up`, after both starts. "holding PWRKEY 2.5 s" means the module didn't answer and is being switched off and on again. Traffic still goes over Wi-Fi (it's preferred whenever both are up), so this uses almost no cellular data.
 
 **Send back:** both logs. Then remove the line.
 
