@@ -39,9 +39,9 @@ void TripTracker::setup() {
   if (this->motion_ != nullptr) {
     // On while the car is being moved: both edges mark movement (off comes a
     // few seconds after the last).
-    this->motion_->add_on_state_callback([this](bool on) { this->last_motion_ms_ = millis() | 1; });
+    this->motion_->add_on_state_callback([this](bool on) { this->last_motion_ms_ = now_ms() | 1; });
     if (this->motion_->has_state() && this->motion_->state)
-      this->last_motion_ms_ = millis() | 1;
+      this->last_motion_ms_ = now_ms() | 1;
   }
 #endif
 #ifdef USE_SENSOR
@@ -128,8 +128,11 @@ void TripTracker::process_fix_(Fix fix) {
   // GPS drift while the car sits still (a garage, a house, a desk) never
   // starts a trip: the motion sensor must have felt it move lately. Without
   // a motion sensor, GPS decides alone.
-  bool can_start = this->start_motion_ms_ == 0 || !this->has_motion_sensor() ||
-                   (this->last_motion_ms_ != 0 && now_ms() - this->last_motion_ms_ < this->start_motion_ms_);
+  bool can_start =
+      this->start_motion_ms_ == 0 || !this->has_motion_sensor() ||
+      (this->last_motion_ms_ != 0 &&
+       // signed: a stamp ORed with 1 can be 1 ms past now
+       static_cast<int32_t>(now_ms() - this->last_motion_ms_) < static_cast<int32_t>(this->start_motion_ms_));
   this->detector_.set_can_start(can_start);
   Trip trip = this->detector_.on_fix(fix.time, fix.speed_kmh, fix.latitude, fix.longitude);
   bool moving = this->detector_.moving();

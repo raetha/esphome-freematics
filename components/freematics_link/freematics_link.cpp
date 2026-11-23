@@ -208,6 +208,13 @@ void FreematicsLink::loop() {
 void FreematicsLink::log_no_reply_() {
   if (this->pending_ == Command::GNSS_READ && this->gnss_misses_++ % 30 != 0)
     return;
+  // ATLP answers "OK" and goes to sleep before its prompt; sometimes it says
+  // nothing at all. Neither is a fault: the ESP32 sleeps next anyway.
+  if (this->pending_ == Command::LOW_POWER) {
+    ESP_LOGD(TAG, "Co-processor in low power%s",
+             this->rx_len_ >= 2 && this->rx_[0] == 'O' && this->rx_[1] == 'K' ? "" : " (no answer)");
+    return;
+  }
   char hex[3 * 16 + 1] = {};
   size_t n = std::min<size_t>(this->rx_len_, 16);
   for (size_t i = 0; i < n; i++)

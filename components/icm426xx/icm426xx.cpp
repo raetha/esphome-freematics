@@ -127,8 +127,12 @@ void ICM426xx::dump_config() {
 #endif
 }
 
+// Milliseconds from then to now; 0 when then is later. A stored time is
+// ORed with 1 to tell it from "never", so it can be 1 ms past a now that is even.
+static uint32_t since(uint32_t now, uint32_t then) { return static_cast<int32_t>(now - then) > 0 ? now - then : 0; }
+
 void ICM426xx::moved_(uint32_t now) {
-  if (this->last_motion_ms_ == 0 || now - this->last_motion_ms_ >= 60000)
+  if (this->last_motion_ms_ == 0 || since(now, this->last_motion_ms_) >= 60000)
     ESP_LOGD(TAG, "Moved");
   this->last_motion_ms_ = now | 1;
 #ifdef USE_BINARY_SENSOR
@@ -141,7 +145,7 @@ void ICM426xx::loop() {
   uint32_t now = now_ms();
 #ifdef USE_BINARY_SENSOR
   if (this->motion_sensor_ != nullptr && this->motion_sensor_->state &&
-      now - this->last_motion_ms_ >= this->motion_hold_ms_)
+      since(now, this->last_motion_ms_) >= this->motion_hold_ms_)
     this->motion_sensor_->publish_state(false);
 #endif
   if (!this->streaming_ || now - this->last_read_ms_ < 50)
