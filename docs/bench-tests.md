@@ -145,6 +145,25 @@ Add `packages/sd-logs-download.yaml` (after `sd-logs.yaml`) and `sd_log_password
 
 **Send back:** how long a 1 MB log takes to download, and whether the dongle kept logging during it.
 
+## 7f. The upstream modem fixes (on the bench)
+
+Two fixes for ESPHome's modem component wait as pull requests (esphome/esphome#23007 and #23157); this tests them on the dongle first. Add to the device config:
+
+```yaml
+substitutions:
+  modem_sim_workarounds: "false"   # our own SIM fixes off, so the component's are the ones at work
+external_components:
+  - source: github://raetha/esphome@test/modem-sim-fixes-2026.11
+    components: [modem]
+    refresh: 0s
+```
+
+- **#23007 (SIM off after CFUN=4):** unplug the dongle and plug it back in. The log shows "SIM status not readable yet: +CME ERROR: SIM failure" a few times, then "SIM still not ready at CFUN=4; powering it up with CFUN=1", then "SIM: READY" within a few seconds.
+- **#23157 (a SIM that never becomes ready):** also set `modem_test_lose_sim: "true"`, which restarts the module right after it starts, as the build that lost the SIM on a drive did. Unplug and plug back in, a few times if need be, until the log shows "+CPIN: NOT INSERTED". About a minute later it shows "SIM not ready after 60 s; restarting the modem (AT+CFUN=1,1)", then "SIM: READY".
+- Afterwards remove all of it (`modem_test_lose_sim` above all), so the dongle runs the released modem component and our own fixes again.
+
+**Send back:** the log from plugging in to "SIM: READY" for each, and say if either fix's line never appeared.
+
 ## 7c. Listening to the OBD port (vehicle data, step one)
 
 Not part of any configuration. With the car parked and on (or ignition on), paste [examples/bench-obd-listen.yaml](https://github.com/raetha/esphome-freematics/blob/dev/examples/bench-obd-listen.yaml) over the config, install, and watch the logs: 30 s after it starts, it sets the co-processor up (fixed 500 kbit/s, silent mode if supported), listens for 60 s, stops, and resets the co-processor. Nothing is sent to the car.

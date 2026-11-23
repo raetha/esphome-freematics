@@ -26,6 +26,8 @@ substitutions:
   # modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
   # modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   # modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
+  # modem_sim_workarounds: "true" # "false": no AT+CFUN=1 after each sync and no modem_restart_after restarts, to test ESPHome's modem component handling the SIM itself
+  # modem_test_lose_sim: "false"  # testing only: "true" restarts the module right after starting it, which can leave its SIM unread
   # modem_restart_after: 15min    # restart the module when it answers but hasn't connected this long (a safety net: a SIM it failed to read stays unread)
   # modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   # gnss_poll_interval: 2s        # reading the GNSS is local: costs no data

@@ -24,6 +24,8 @@ substitutions:
   modem_wifi_wait: 10s          # at start, wait this long for Wi-Fi before starting the module (at home it isn't started at all)
   modem_boot_wait: 8s           # after a press, before ESPHome's modem component starts talking to the module
   modem_pwrkey_wait: 10s        # then this long for it to answer before the next try
+  modem_sim_workarounds: "true" # "false": no AT+CFUN=1 after each sync and no modem_restart_after restarts, to test ESPHome's modem component handling the SIM itself
+  modem_test_lose_sim: "false"  # testing only: "true" restarts the module right after starting it, which can leave its SIM unread
   modem_restart_after: 15min    # restart the module when it answers but hasn't connected this long (a safety net: a SIM it failed to read stays unread)
   modem_reboot_timeout: 0s      # restart the device when LTE stays down this long; 0s: never (LTE is off at home on Wi-Fi)
   gnss_poll_interval: 2s        # reading the GNSS is local: costs no data
@@ -101,7 +103,11 @@ modem:
   update_interval: 120s
   on_sync:
     - globals.set: { id: modem_synced, value: "true" }
-    - script.execute: modem_watchdog
+    - if:
+        condition:
+          lambda: return ${modem_sim_workarounds};
+        then:
+          - script.execute: modem_watchdog
     # The module's first answer after the ESP32 restarted while the module may
     # have kept power (an update, a crash, a reboot: the board can't cut it),
     # and any answer after three syncs without a connection (a dropped
@@ -121,7 +127,7 @@ modem:
         id(modem_first_sync) = first;
         esp_reset_reason_t reason = esp_reset_reason();
         bool fresh = reason == ESP_RST_POWERON || reason == ESP_RST_DEEPSLEEP;
-        id(modem_restart_now) = (first && !fresh && ${modem_restart_on_boot}) || stuck;
+        id(modem_restart_now) = (first && (!fresh || ${modem_test_lose_sim}) && ${modem_restart_on_boot}) || stuck;
         if (id(modem_restart_now))
           id(modem_syncs) = 0;
     - if:
@@ -143,8 +149,12 @@ modem:
           # APN, then sends AT+CFUN=4, which on the SIM7070 leaves the SIM off
           # ("+CME ERROR: SIM failure" until a power cycle). Full
           # functionality brings it back within a second.
-          - delay: 1s
-          - modem.send_at: "AT+CFUN=1"
+          - if:
+              condition:
+                lambda: return ${modem_sim_workarounds};
+              then:
+                - delay: 1s
+                - modem.send_at: "AT+CFUN=1"
   on_connect:
     - logger.log: "Cellular: PPP up"
     - script.stop: modem_watchdog
@@ -153,7 +163,11 @@ modem:
   on_disconnect:
     - logger.log: "Cellular: PPP down"
     - globals.set: { id: modem_syncs, value: "3" }   # restart the module at its next answer
-    - script.execute: modem_watchdog
+    - if:
+        condition:
+          lambda: return ${modem_sim_workarounds};
+        then:
+          - script.execute: modem_watchdog
 
 output:
   - platform: gpio
