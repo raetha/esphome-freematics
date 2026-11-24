@@ -165,7 +165,7 @@ void TrackerUplink::loop() {
         this->records_sent_ += n;
         if (this->transport_->acknowledged()) {
           this->last_ack_at_ = now | 1;  // never 0
-          ESP_LOGI(TAG, "%s took %u records", this->transport_->server(), (unsigned) n);
+          ESP_LOGI(TAG, "%s took %u records%s", this->transport_->server(), (unsigned) n, this->transport_->ack_note());
         }
         break;
       }

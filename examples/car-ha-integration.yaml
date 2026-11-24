@@ -52,7 +52,7 @@ substitutions:
   # lte_on_wifi: "false"    # "true" for bench tests: LTE stays on beside Wi-Fi, so its logs reach Device Builder
 
   # Home Assistant integration (uplink-ha-webhook.yaml)
-  # ha_send_interval: 2min            # batch records this long before sending (sooner on a trip start, stop or heartbeat)
+  # ha_send_interval: 5min            # batch records this long before sending (at once on a trip start, stop or heartbeat, and before sleeping)
   # ha_moving_interval: 10s           # a record at least this often while moving
   # ha_heartbeat_interval: 15min      # one record this often while parked; 0s: none
   # ha_altitude: "true"               # send altitude (a byte or two per record)
@@ -75,6 +75,9 @@ substitutions:
   # standby_motion_mg: "150"      # mg: a change this big between samples wakes it (doors, towing); "0": no motion wake
   # standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
   # standby_stay_awake: 30min     # the "Stay awake" switch turns itself off after this
+
+  # Testing: radios wait for the first GNSS fix (gnss-first.yaml)
+  # gnss_first_wait: 3min   # the most the radios wait for the first fix
 
   # WireGuard tunnel home (wireguard.yaml)
   # wireguard_address: !secret car1_wg_address        # required with wireguard.yaml: this dongle's tunnel address, e.g. 10.66.0.11
@@ -103,6 +106,8 @@ packages:
       # - packages/sd-logs-download.yaml
       # Optional: sleep while parked, waking when the car is turned on or moved
       # - packages/standby.yaml
+      # Testing: Wi-Fi and LTE wait for the first GNSS fix (needs wifi-first and standby)
+      # - packages/gnss-first.yaml
       # Optional: a WireGuard tunnel home on chosen Wi-Fi networks (or cellular),
       # for updates from Device Builder away from home (set the wireguard_*
       # substitutions above)

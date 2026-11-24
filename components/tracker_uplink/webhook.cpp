@@ -2,6 +2,8 @@
 
 #ifdef USE_UPLINK_WEBHOOK
 
+#include <cinttypes>
+#include <cstdio>
 #include <cstring>
 
 #include <esp_crt_bundle.h>
@@ -29,6 +31,8 @@ bool WebhookPoster::start(const std::string &url, size_t max_body) {
   config.buffer_size = 512;
   config.buffer_size_tx = 512;
   config.disable_auto_redirect = true;
+  config.event_handler = WebhookPoster::on_event_;
+  config.user_data = this;
   // No TCP keep-alive probes: they would cost data between batches. HTTP/1.1
   // keeps the connection itself open while the server does.
 #if CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS
@@ -59,7 +63,20 @@ int WebhookPoster::take_result() {
   return status;
 }
 
+esp_err_t WebhookPoster::on_event_(esp_http_client_event_t *event) {
+  if (event->event_id == HTTP_EVENT_ON_CONNECTED)
+    static_cast<WebhookPoster *>(event->user_data)->connects_++;
+  return ESP_OK;
+}
+
 int WebhookPoster::perform_() {
+  this->connects_ = 0;
+  int status = this->perform_once_();
+  this->last_connects_.store(this->connects_);
+  return status;
+}
+
+int WebhookPoster::perform_once_() {
   esp_http_client_set_post_field(this->client_, reinterpret_cast<const char *>(this->body_.get()),
                                  static_cast<int>(this->len_));
   esp_err_t err = esp_http_client_perform(this->client_);
@@ -100,7 +117,11 @@ bool WebhookTransport::setup(size_t batch_max) {
 
 void WebhookTransport::dump_config() {
   // The URL itself stays out of the log: the webhook ID in it is the only key.
-  ESP_LOGCONFIG(TAG, "  Protocol: compact batches to a Home Assistant webhook over HTTPS");
+  ESP_LOGCONFIG(TAG,
+                "  Protocol: compact batches to a Home Assistant webhook over HTTPS\n"
+                "  Batches since boot: %" PRIu32 " over the kept connection, %" PRIu32 " over a new one, %" PRIu32
+                " sent twice (the kept connection had closed)",
+                this->batches_kept_, this->batches_new_, this->batches_resent_);
 }
 
 static ::trackcodec::CompactKind compact_kind(uint8_t decision) {
@@ -144,6 +165,7 @@ SendResult WebhookTransport::poll(uint32_t now) {
   if (status >= 200 && status < 300) {
     if (this->identity_in_flight_)
       this->identity_sent_ = true;
+    this->note_connection_(now);
     return SendResult::ACKED;
   }
   if (status < 0) {
@@ -155,6 +177,34 @@ SendResult WebhookTransport::poll(uint32_t now) {
     ESP_LOGW(TAG, "Home Assistant answered HTTP %d; %u records kept", status, (unsigned) n);
   }
   return SendResult::FAILED;
+}
+
+void WebhookTransport::note_connection_(uint32_t now) {
+  // Whether Home Assistant (or Home Assistant Cloud) keeps the connection open
+  // between batches decides much of each batch's cost on LTE: a new one costs a
+  // TCP and TLS handshake, and one that closed while idle costs the request twice.
+  const char *how;
+  switch (this->poster_.last_connects()) {
+    case 0:
+      how = "kept connection";
+      this->batches_kept_++;
+      break;
+    case 1:
+      how = "new connection";
+      this->batches_new_++;
+      break;
+    default:
+      how = "sent twice: the kept connection had closed";
+      this->batches_resent_++;
+      break;
+  }
+  if (this->last_answer_ms_ == 0) {
+    snprintf(this->ack_note_, sizeof(this->ack_note_), " (%s)", how);
+  } else {
+    snprintf(this->ack_note_, sizeof(this->ack_note_), " (%s, %" PRIu32 " s after the last)", how,
+             (now - this->last_answer_ms_) / 1000);
+  }
+  this->last_answer_ms_ = now | 1;
 }
 
 }  // namespace esphome::tracker_uplink

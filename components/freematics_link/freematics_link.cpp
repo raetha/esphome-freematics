@@ -1,6 +1,7 @@
 #include "freematics_link.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -270,7 +271,10 @@ void FreematicsLink::handle_fix_(const char *reply) {
     this->fix_->publish_state(good);
 #endif
   if (good != this->fix_now_) {
-    if (good) {
+    if (good && !this->has_fix_) {
+      // How long the first fix took is what placement and radio tests compare
+      ESP_LOGI(TAG, "GNSS fix: %u satellites (the first, %" PRIu32 " s after start)", fix.satellites, now_ms() / 1000);
+    } else if (good) {
       ESP_LOGI(TAG, "GNSS fix: %u satellites", fix.satellites);
     } else {
       ESP_LOGI(TAG, "GNSS fix lost");

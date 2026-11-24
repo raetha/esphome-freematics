@@ -37,15 +37,22 @@ class WebhookPoster {
   int take_result();
   /// The ESP-IDF error of the last post that got no answer.
   esp_err_t last_error() const { return this->error_.load(); }
+  /// Connections the last post opened: 0 it went over the kept one, 1 a new
+  /// one, 2 the kept one had closed and the request went again over a new one.
+  uint8_t last_connects() const { return this->last_connects_.load(); }
 
  protected:
   enum State : uint8_t { IDLE, QUEUED, DONE };
   static void task_(void *arg);
+  static esp_err_t on_event_(esp_http_client_event_t *event);
   int perform_();
+  int perform_once_();
 
   std::atomic<uint8_t> state_{IDLE};
   std::atomic<int> status_{0};
   std::atomic<esp_err_t> error_{ESP_OK};
+  uint8_t connects_{0};  // counted by on_event_, in the poster's task
+  std::atomic<uint8_t> last_connects_{0};
   std::unique_ptr<uint8_t[]> body_;  // NOLINT(cppcoreguidelines-avoid-c-arrays)
   size_t max_body_{0};
   size_t len_{0};
@@ -65,6 +72,7 @@ class WebhookTransport final : public Transport {
   bool ready() override { return this->poster_.idle(); }
   size_t send(const RecordQueue &records, size_t max) override;
   SendResult poll(uint32_t now) override;
+  const char *ack_note() const override { return this->ack_note_; }
   void set_identity(const char *model, const char *firmware) override {
     this->model_ = model;
     this->firmware_ = firmware;
@@ -77,9 +85,17 @@ class WebhookTransport final : public Transport {
   const char *firmware_{nullptr};
   bool identity_sent_{false};
   bool identity_in_flight_{false};
+  void note_connection_(uint32_t now);
   WebhookPoster poster_;
   uint16_t sequence_{0};
   size_t in_flight_{0};
+  // How batches reached Home Assistant since boot: over the kept connection, a
+  // new one, or a new one after the kept one had closed (the request sent twice).
+  uint32_t batches_kept_{0};
+  uint32_t batches_new_{0};
+  uint32_t batches_resent_{0};
+  uint32_t last_answer_ms_{0};  // 0: none yet
+  char ack_note_[96]{};
   uint8_t buf_[1024];
 };
 

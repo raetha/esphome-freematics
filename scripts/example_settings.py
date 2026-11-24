@@ -34,6 +34,7 @@ TITLES = {
     "sd-logs-download.yaml": "SD card: log download (sd-logs-download.yaml)",
     "wireguard.yaml": "WireGuard tunnel home (wireguard.yaml)",
     "standby.yaml": "Sleep while parked (standby.yaml)",
+    "gnss-first.yaml": "Testing: radios wait for the first GNSS fix (gnss-first.yaml)",
 }
 
 

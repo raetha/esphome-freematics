@@ -46,6 +46,8 @@ class Transport {
   /// The device's model and firmware version, for protocols that carry them
   /// (strings that live as long as the program).
   virtual void set_identity(const char *model, const char *firmware) {}
+  /// Said after "took N records" in the log: how the last acknowledged batch went ("": nothing to add).
+  virtual const char *ack_note() const { return ""; }
   uint32_t bytes_sent() const { return this->bytes_sent_; }
 
  protected:
