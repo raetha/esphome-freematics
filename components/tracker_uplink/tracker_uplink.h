@@ -53,7 +53,8 @@ class TrackerUplink final : public Component,
 #endif
 
   // trip_tracker::Listener
-  void on_trip_fix(const trip_tracker::Fix &fix, trip_tracker::Trip trip, bool moving, bool fast) override;
+  void on_trip_fix(const trip_tracker::Fix &fix, trip_tracker::Trip trip, bool moving, bool fast,
+                   const trip_tracker::TripStart *start) override;
   void on_trip_note(uint32_t time, uint8_t impact_dg, uint16_t next_report_min) override;
   size_t queued() const override { return this->backlog_.size(); }
   bool delivered_any() const override { return this->records_sent_ > 0; }

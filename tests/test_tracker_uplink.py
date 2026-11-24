@@ -749,3 +749,20 @@ def test_a_resumed_trip_goes_on_while_driving(cli):
         ("fix", 1400, 0, 90),
     ]
     assert track(cli, events) == ["NONE", "RECORD", "RECORD", "STOP", "NONE"]
+
+
+def test_a_trip_begins_at_its_first_fast_fix_without_earlier_motion(cli):
+    assert cli("startat 1000 0 300") == ["1000"]  # no run of movement
+    assert cli("startat 1000 1000 300") == ["1000"]
+    assert cli("startat 1000 1005 300") == ["1000"]  # felt only after GNSS saw it
+
+
+def test_a_trip_begins_when_the_motion_sensor_first_felt_it(cli):
+    # The receiver found its first fix 4 minutes into the drive
+    assert cli("startat 1240 1000 300") == ["1000"]
+
+
+def test_motion_long_before_the_first_fast_fix_is_not_the_trip(cli):
+    # Loading the car for 10 minutes, then driving off without a pause
+    assert cli("startat 2000 1400 300") == ["1700"]
+    assert cli("startat 2000 1400 0") == ["2000"]

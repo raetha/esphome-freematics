@@ -38,7 +38,7 @@ substitutions:
   # trip_moving_speed: "6"        # km/h: at or above, the car is moving
   # trip_start_fixes: "3"         # a trip starts after this many fast fixes in a row (2 s apart)...
   # trip_start_distance: 50m      # ...this far from where the car was parked (GPS drift doesn't start trips)
-  # trip_start_motion: 300s       # a trip starts only this soon after the motion sensor felt the car move (getting in, driving); 0s: GPS alone
+  # trip_start_motion: 300s       # a trip starts only this soon after the motion sensor felt the car move (getting in, driving), and is dated at most this much earlier than GPS first saw it moving; 0s: GPS alone
   # trip_stop_delay: 180s         # below moving speed this long: the trip is over (telelogger: 180 s)
 
   # Wi-Fi first

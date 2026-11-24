@@ -86,10 +86,29 @@ void TrackerUplink::set_location_(Record &r, const trip_tracker::Fix &fix) const
   }
 }
 
-void TrackerUplink::on_trip_fix(const trip_tracker::Fix &fix, trip_tracker::Trip trip, bool moving, bool fast) {
+void TrackerUplink::on_trip_fix(const trip_tracker::Fix &fix, trip_tracker::Trip trip, bool moving, bool fast,
+                                const trip_tracker::TripStart *start) {
   Decision why = this->sampler_.on_fix(fix.time, fix.course_deg, trip, moving, fast);
   if (why == Decision::NONE)
     return;
+  if (why == Decision::START && start != nullptr && start->time < fix.time) {
+    // The trip began before the fix that confirmed it: the start record is
+    // dated then. Begun at the run's first fast fix, it has that fix's
+    // position; begun earlier (the motion sensor felt the car move before
+    // GNSS saw it), none, as the car was still where it was parked: servers
+    // keep the last position they have. The first fast fix, then this one,
+    // follow as fixes of the trip.
+    Record s = this->base_record_(start->time, Decision::START);
+    if (start->at_first_fix)
+      this->set_location_(s, start->first);
+    this->enqueue_(s);
+    if (!start->at_first_fix && start->first.time > start->time && start->first.time < fix.time) {
+      Record first = this->base_record_(start->first.time, Decision::RECORD);
+      this->set_location_(first, start->first);
+      this->enqueue_(first);
+    }
+    why = Decision::RECORD;
+  }
   Record r = this->base_record_(fix.time, why);
   this->set_location_(r, fix);
   this->enqueue_(r);

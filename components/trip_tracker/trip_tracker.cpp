@@ -39,9 +39,16 @@ void TripTracker::setup() {
   if (this->motion_ != nullptr) {
     // On while the car is being moved: both edges mark movement (off comes a
     // few seconds after the last).
-    this->motion_->add_on_state_callback([this](bool on) { this->last_motion_ms_ = now_ms() | 1; });
-    if (this->motion_->has_state() && this->motion_->state)
+    this->motion_->add_on_state_callback([this](bool on) {
       this->last_motion_ms_ = now_ms() | 1;
+      if (!on) {
+        this->motion_run_ms_ = 0;
+      } else if (this->motion_run_ms_ == 0) {
+        this->motion_run_ms_ = now_ms() | 1;
+      }
+    });
+    if (this->motion_->has_state() && this->motion_->state)
+      this->last_motion_ms_ = this->motion_run_ms_ = now_ms() | 1;
   }
 #endif
 #ifdef USE_SENSOR
@@ -140,11 +147,37 @@ void TripTracker::process_fix_(Fix fix) {
   Trip trip = this->detector_.on_fix(fix.time, fix.speed_kmh, fix.latitude, fix.longitude);
   bool moving = this->detector_.moving();
   bool fast = this->detector_.fast(fix.speed_kmh);
+  // The first fix of a run at moving speed: if the run becomes a trip, the
+  // trip began there, or when the motion sensor's run of movement still going
+  // on at that fix began, if that's earlier. (With start_fixes 1, the fix that
+  // starts the trip is its own run.)
+  bool run_begins = trip == Trip::START ? this->run_first_.time == 0 : !moving && this->detector_.run_length() == 1;
+  if (run_begins) {
+    this->run_first_ = fix;
+    this->run_motion_start_ = 0;
+    if (this->motion_run_ms_ != 0) {
+      uint32_t ago_s = (now_ms() - this->motion_run_ms_) / 1000;
+      if (ago_s > 0 && ago_s < fix.time)
+        this->run_motion_start_ = fix.time - ago_s;
+    }
+  } else if (!moving && this->detector_.run_length() == 0) {
+    this->run_first_ = Fix{};  // the run broke off: no trip from it
+  }
+  TripStart start;
+  if (trip == Trip::START) {
+    start.first = this->run_first_;
+    start.time =
+        ::trackcodec::trip_start_time(this->run_first_.time, this->run_motion_start_, this->start_motion_ms_ / 1000);
+    start.at_first_fix = start.time == this->run_first_.time;
+    this->run_first_ = Fix{};
+    this->run_motion_start_ = 0;
+  }
   this->fix_trigger_.trigger(fix);
   for (auto *l : this->listeners_)
-    l->on_trip_fix(fix, trip, moving, fast);
+    l->on_trip_fix(fix, trip, moving, fast, trip == Trip::START ? &start : nullptr);
   if (trip == Trip::START) {
-    ESP_LOGI(TAG, "Trip started");
+    ESP_LOGI(TAG, "Trip started %" PRIu32 " s before GPS confirmed it (%s)", fix.time - start.time,
+             start.at_first_fix ? "its first fix at moving speed" : "when the motion sensor first felt it");
     this->save_trip_(true);
     this->trip_start_trigger_.trigger();
   } else if (trip == Trip::STOP) {

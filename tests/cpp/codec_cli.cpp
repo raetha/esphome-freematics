@@ -18,6 +18,7 @@
 //       | car <time> <0|1> (whether a trip may start; prints NONE)
 //       | resume <time> (a trip was under way before a restart; prints NONE)
 //   -> one decision per line: NONE RECORD START STOP HEARTBEAT
+//   startat <first_fast> <motion_start> <max_back_s>  -> when the trip began (trip_start_time)
 //   queue <capacity> <n> then n ops: push <time> | pop <count> | erase <index>
 //   -> after each op: the record times in order, or "-" when empty, and "full" when full
 #include <cstdio>
@@ -213,6 +214,10 @@ int main() {
         }
         std::printf("%s\n", names[static_cast<int>(d)]);
       }
+    } else if (!std::strcmp(cmd, "startat")) {
+      unsigned first, motion, back;
+      std::scanf("%u %u %u", &first, &motion, &back);
+      std::printf("%u\n", (unsigned) trackcodec::trip_start_time(first, motion, back));
     } else if (!std::strcmp(cmd, "queue")) {
       unsigned cap, n;
       std::scanf("%u %u", &cap, &n);

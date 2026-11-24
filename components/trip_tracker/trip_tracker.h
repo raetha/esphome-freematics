@@ -42,11 +42,19 @@ struct Extras {
   int8_t signal_dbm{0};  // 0: unknown (cellular off)
 };
 
+/// How a trip GNSS has just confirmed began (trackcodec::trip_start_time).
+struct TripStart {
+  uint32_t time{0};          // Unix seconds
+  bool at_first_fix{false};  // it began at first; otherwise earlier, still where the car was parked
+  Fix first{};               // the run's first fix at moving speed
+};
+
 /// An uplink (tracker_uplink) that reports this car's trips.
 class Listener {
  public:
-  /// A fix, with what the trip detector made of it.
-  virtual void on_trip_fix(const Fix &fix, Trip trip, bool moving, bool fast) = 0;
+  /// A fix, with what the trip detector made of it; start is set only when
+  /// trip is START.
+  virtual void on_trip_fix(const Fix &fix, Trip trip, bool moving, bool fast, const TripStart *start) = 0;
   /// Something to report now, out of the usual sampling: an impact (peak in
   /// tenths of g), or that the device goes to sleep and reports again within
   /// next_report_min minutes.
@@ -162,6 +170,14 @@ class TripTracker : public Component {
   Fix last_fix_{};
   uint32_t last_fix_ms_{0};
   uint32_t last_motion_ms_{0};
+  // The motion sensor's current run of movement: when it began (0: none now).
+  // The sensor stays on a few seconds after the last movement, so a pause
+  // longer than that (loading the car, then a wait) ends a run.
+  uint32_t motion_run_ms_{0};
+  // The run of fixes at moving speed that may become a trip: its first fix,
+  // and when the motion sensor's run under way at that fix began (0: none).
+  Fix run_first_{};
+  uint32_t run_motion_start_{0};
   uint8_t clock_syncs_needed_{1};  // until 0, the clock isn't trusted
   Trigger<> trip_start_trigger_;
   Trigger<> trip_stop_trigger_;

@@ -23,6 +23,21 @@ struct TripConfig {
 
 enum class Trip : uint8_t { NONE, START, STOP };
 
+/// When a trip GNSS has just confirmed began (Unix seconds). GNSS decides
+/// whether the car is on a trip; when it began is earlier than its confirming
+/// fix: at the first fix of the run at moving speed, or earlier still when the
+/// motion sensor had been feeling movement without a pause since before that
+/// fix (motion_start, 0: no such run), as when the receiver is still finding
+/// its first fix while the car drives off. max_back_s bounds how far before
+/// the first fast fix the motion sensor may take the start: loading the car
+/// just before driving off is not the trip.
+inline uint32_t trip_start_time(uint32_t first_fast, uint32_t motion_start, uint32_t max_back_s) {
+  if (motion_start == 0 || motion_start >= first_fast)
+    return first_fast;
+  uint32_t earliest = first_fast > max_back_s ? first_fast - max_back_s : 0;
+  return motion_start > earliest ? motion_start : earliest;
+}
+
 /// Seconds from then to now; 0 when the clock has stepped back past then (a
 /// clock corrected after waking from deep sleep).
 inline uint32_t elapsed(uint32_t now, uint32_t then) { return now > then ? now - then : 0; }
@@ -34,6 +49,8 @@ class TripDetector {
   const TripConfig &config() const { return this->config_; }
 
   bool moving() const { return this->moving_; }
+  /// Fixes in a row at moving speed while parked (0 on a trip): 1 at a run's first.
+  uint8_t run_length() const { return this->fast_fixes_; }
   /// Whether a fix at this speed counts as moving.
   bool fast(float speed_kmh) const { return speed_kmh >= this->config_.moving_speed_kmh; }
 
