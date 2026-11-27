@@ -178,6 +178,7 @@ class TripTracker : public Component {
   bool trip_unsettled_{false};  // trip_ is from before the restart: went on, or ended then?
   void save_trip_(bool sync);
   void settle_trip_(const Fix *fix);
+  void settle_without_fix_();
   void log_parked_status_();
   const char *model_{""};
   const char *firmware_{""};

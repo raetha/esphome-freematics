@@ -221,9 +221,6 @@ int main() {
           float speed, course, lat, lon;
           std::scanf("%f %f %f %f", &speed, &course, &lat, &lon);
           d = tr.on_fix(t, speed, course, lat, lon);
-        } else if (!std::strcmp(kind, "resume")) {
-          tr.resume();
-          d = Decision::NONE;
         } else if (!std::strcmp(kind, "resfrom")) {  // resfrom <time> <last fast fix>
           unsigned last;
           std::scanf("%u", &last);

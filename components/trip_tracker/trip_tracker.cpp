@@ -29,11 +29,8 @@ void TripTracker::setup() {
     ESP_LOGI(
         TAG,
         "A trip was under way before the restart: it goes on if the car is moving again, or ends where it last was");
-    // No fix at all (a garage): the car hasn't been driven since.
-    this->set_timeout("resume", this->detector_.config().stop_delay_s * 1000, [this]() {
-      if (this->trip_unsettled_)
-        this->settle_trip_(nullptr);
-    });
+    this->set_timeout("resume", this->detector_.config().stop_delay_s * 1000,
+                      [this]() { this->settle_without_fix_(); });
   } else {
     this->trip_ = SavedTrip{};
   }
@@ -260,6 +257,21 @@ void TripTracker::settle_trip_(const Fix *fix) {
   this->trip_ = SavedTrip{};
   this->save_trip_(true);
   this->trip_stop_trigger_.trigger();
+}
+
+void TripTracker::settle_without_fix_() {
+  if (!this->trip_unsettled_)
+    return;
+  uint32_t stop_delay_ms = this->detector_.config().stop_delay_s * 1000;
+  // Still felt moving: driving on while the receiver finds its first fix
+  // (minutes, at times), so the first fix decides.
+  if (this->has_motion_sensor() && this->last_motion_ms_ != 0 && now_ms() - this->last_motion_ms_ < stop_delay_ms) {
+    this->set_timeout("resume", stop_delay_ms, [this]() { this->settle_without_fix_(); });
+    return;
+  }
+  // No fix and no movement for the stop delay (a garage): the car hasn't been
+  // driven since.
+  this->settle_trip_(nullptr);
 }
 
 void TripTracker::note_(uint8_t impact_dg, uint16_t next_report_min) {

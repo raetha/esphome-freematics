@@ -68,6 +68,7 @@ class TrackerUplink final : public Component,
   void enqueue_(const Record &record);
   Record base_record_(uint32_t time, Decision why) const;
   void set_location_(Record &r, const trip_tracker::Fix &fix) const;
+  void set_extras_(Record &r) const;
   void send_();
 
   Transport *transport_{nullptr};

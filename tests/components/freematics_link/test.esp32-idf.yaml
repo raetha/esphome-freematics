@@ -32,8 +32,8 @@ freematics_link:
   battery_interval: 60s
   on_fix:
     - logger.log:
-        format: "Fix %.6f,%.6f at %u"
-        args: [fix.latitude, fix.longitude, fix.epoch]
+        format: "Fix %.6f,%.6f at %lu"
+        args: [fix.latitude, fix.longitude, "(unsigned long) fix.epoch"]
 
 sensor:
   - platform: freematics_link

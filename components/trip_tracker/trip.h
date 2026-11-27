@@ -74,30 +74,15 @@ class TripDetector {
     this->moving_ = true;
     this->fast_fixes_ = 0;
     this->last_fast_ = last_fast;
-    this->resume_pending_ = false;
-  }
-  /// Carry on a trip that was under way before a restart, its last fast fix
-  /// unknown: the stop delay counts from the first fix after it.
-  void resume() {
-    this->moving_ = true;
-    this->fast_fixes_ = 0;
-    this->resume_pending_ = true;
   }
   /// The trip under way ended without a stop from this detector (it ended
   /// while the device was off): parked again.
-  void abandon() {
-    this->moving_ = false;
-    this->resume_pending_ = false;
-  }
+  void abandon() { this->moving_ = false; }
 
   /// A valid fix at time now (Unix seconds). Without a position (NaN), only
   /// the speed decides a trip's start.
   Trip on_fix(uint32_t now, float speed_kmh, float latitude = NAN, float longitude = NAN) {
     bool is_fast = this->fast(speed_kmh);
-    if (this->resume_pending_) {
-      this->resume_pending_ = false;
-      this->last_fast_ = now;
-    }
     if (is_fast)
       this->last_fast_ = now;
     if (!this->moving_) {
@@ -143,7 +128,6 @@ class TripDetector {
   TripConfig config_;
   bool moving_{false};
   bool can_start_{true};
-  bool resume_pending_{false};
   uint8_t fast_fixes_{0};
   uint32_t last_fast_{0};
   bool has_anchor_{false};

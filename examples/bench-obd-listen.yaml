@@ -127,7 +127,7 @@ script:
       - logger.log:
           level: INFO
           format: "OBD listen test: done, %u lines received while listening"
-          args: [id(frames)]
+          args: ["(unsigned) id(frames)"]
       # Leave nothing running: a reset clears the co-processor's settings.
       - output.turn_off: coproc_reset
       - delay: 50ms

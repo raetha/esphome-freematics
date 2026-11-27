@@ -63,13 +63,17 @@ Record TrackerUplink::base_record_(uint32_t time, Decision why) const {
   // heartbeats and notes only.
   if (why == Decision::START || why == Decision::STOP || why == Decision::HEARTBEAT) {
     r.motion = this->parent_->is_moving() ? 1 : 0;
-    trip_tracker::Extras e = this->parent_->extras();
-    r.battery_mv = e.battery_mv;
-    r.has_temperature = e.has_temperature;
-    r.temperature_c = e.temperature_c;
-    r.signal_dbm = e.signal_dbm;
+    this->set_extras_(r);
   }
   return r;
+}
+
+void TrackerUplink::set_extras_(Record &r) const {
+  trip_tracker::Extras e = this->parent_->extras();
+  r.battery_mv = e.battery_mv;
+  r.has_temperature = e.has_temperature;
+  r.temperature_c = e.temperature_c;
+  r.signal_dbm = e.signal_dbm;
 }
 
 void TrackerUplink::set_location_(Record &r, const trip_tracker::Fix &fix) const {
@@ -121,13 +125,8 @@ void TrackerUplink::on_trip_note(uint32_t time, uint8_t impact_dg, uint16_t next
   bool moving = this->parent_->is_moving();
   // On a trip it's a fix (the trip goes on); parked, a heartbeat.
   Record r = this->base_record_(time, moving ? Decision::RECORD : Decision::HEARTBEAT);
-  if (moving) {  // the extras a heartbeat carries
-    trip_tracker::Extras e = this->parent_->extras();
-    r.battery_mv = e.battery_mv;
-    r.has_temperature = e.has_temperature;
-    r.temperature_c = e.temperature_c;
-    r.signal_dbm = e.signal_dbm;
-  }
+  if (moving)
+    this->set_extras_(r);  // the extras a heartbeat carries
   r.impact_dg = impact_dg;
   r.next_report_min = next_report_min;
   uint32_t fix_ms = this->parent_->last_fix_ms();

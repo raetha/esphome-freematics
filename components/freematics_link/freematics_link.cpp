@@ -236,7 +236,7 @@ void FreematicsLink::handle_reply_(Command cmd, const char *reply) {
       ESP_LOGI(TAG, "Co-processor: %s (version %d)", reply, this->version_number_);
 #ifdef USE_TEXT_SENSOR
       if (this->version_ != nullptr && this->version_number_ != 0) {
-        char buf[8];
+        char buf[24];  // room for any int, so GCC sees nothing to truncate
         snprintf(buf, sizeof(buf), "%d.%d", this->version_number_ / 10, this->version_number_ % 10);
         this->version_->publish_state(buf);
       }

@@ -727,22 +727,9 @@ def test_a_clock_stepping_back_changes_nothing(cli):
     ]
 
 
-def test_a_trip_goes_on_after_a_restart(cli):
-    """Restarted on a trip (unplugged, a crash): parked, its stop still comes,
-    the stop delay counting from the first fix after the restart."""
-    events = [
-        ("resume", 1000),
-        ("fix", 1000, 0, 0),  # parked: on the trip, no heartbeat
-        ("fix", 1100, 0, 0),
-        ("fix", 1180, 0, 0),  # 180 s after the first fix: stop
-        ("fix", 1185, 0, 0),
-    ]
-    assert track(cli, events) == ["NONE", "RECORD", "RECORD", "STOP", "NONE"]
-
-
 def test_a_resumed_trip_goes_on_while_driving(cli):
     events = [
-        ("resume", 1000),
+        ("resfrom", 1000, 990),
         ("fix", 1000, 50, 90),  # still driving: no new start, the trip goes on
         ("fix", 1010, 50, 90),
         ("fix", 1200, 0, 90),  # 190 s since the last fast fix: stop

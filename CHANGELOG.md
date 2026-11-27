@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-First release: ESPHome on the Freematics ONE+ Model B in place of the stock telelogger firmware, reporting GPS tracks to Traccar in a compact, acknowledged format (about 12 KB per hour of driving), or live to Home Assistant, with records and logs kept on the SD card and the device asleep while the car is parked. Vehicle data follows; nothing is sent to the vehicle bus.
+First release: ESPHome on the Freematics ONE+ Model B in place of the stock telelogger firmware, reporting GPS tracks to Traccar in a compact, acknowledged format (about 12 KB per hour of driving), or to Home Assistant through its Freematics integration, with records and logs kept on the SD card and the device asleep while the car is parked. Vehicle data follows; nothing is sent to the vehicle bus.
 
 ### Added
 
@@ -33,23 +33,18 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - One log level for the device, the SD card's log and the co-processor link (`logger_level`, INFO by default): INFO says what happened (trips, what each server took, networks coming and going, sleep and waking) without filling the card; DEBUG adds the detail to troubleshoot.
 - The Home Assistant integration learns each dongle's model and firmware version (`trip_tracker: model:`, ONE+ Model B in the board package; the version is the package's with the commit it was built from, such as `0.1.0+ff6a429`): sent once per boot on the first webhook batch, about 30 bytes.
 - A trip's start is dated when the car started moving, not when GPS confirmed the trip: at the first fix at moving speed, or, while the receiver is still finding its first fix after the dongle wakes, when the motion sensor's run of movement began (at most 5 minutes before GPS saw the car move, `trip_start_motion`). GPS still decides whether there is a trip, so loading or unloading the car never makes one. Trip durations in Home Assistant come out right, and Traccar's trip starts where the car was parked.
+- A trip under way survives a restart (unplugged, a power cut, a crash, an update): if the car is moving again within the stop delay of the trip's last fix at moving speed, the trip goes on; otherwise (the car parked, then the dongle lost power) its stop is reported, dated at that fix and placed there, as it would have been with the power on. While the receiver is still finding its first fix after the restart, the trip stays open as long as the motion sensor feels the car moving, so a drive isn't split in two.
 - The log says how long each start's first GPS fix took.
 - At debug log level, a parked dongle logs once a minute what the trip start rule sees (the last fix's age, speed and satellites, the distance from where it's parked, fast fixes in a row, the last movement felt), so a drive that never became a trip can be explained.
 
 ### Internal
 
-- No more compiler warnings about empty `if` bodies when building at the default INFO log level.
-
-- The motion sensor's log says "Moved" once a minute at most while moving, as intended (a time 1 ms ahead of the loop's logged every sample), and the co-processor's "OK" before it sleeps is no longer reported as an incomplete reply.
-
 - The examples list the settings an optional package requires (`sd_log_password`, `ha_webhook_url`) among the commented-out settings, with an example value.
-
 - Documented the board's lack of a clock chip and ESP-IDF's steadier sleep clock option, set aside for now.
-
 - The components meant for other boards (SD card, file queue and logger, motion sensor, trips and uplinks) name nothing specific to this dongle, ready to move to a repository of their own and then to ESPHome once the project is stable.
-
-- Trips are decided by a `trip_tracker` component, once for every uplink; each `tracker_uplink` sends through a transport per protocol (Teltonika and Freematics over UDP, the webhook), so a new protocol is a class and a schema entry; the motion sensor is an `icm426xx` component instead of YAML lambdas, with its motion analysis tested on the host. A trip under way survives a restart (unplugged, a power cut, a crash, an update): if the car is moving again within the stop delay of the trip's last fix at moving speed, the trip goes on; otherwise (the car parked, then the dongle lost power) its stop is reported, dated at that fix and placed there, as it would have been with the power on.
-
+- Trips are decided by a `trip_tracker` component, once for every uplink; each `tracker_uplink` sends through a transport per protocol (Teltonika and Freematics over UDP, the webhook), so a new protocol is a class and a schema entry; the motion sensor is an `icm426xx` component instead of YAML lambdas, with its motion analysis tested on the host.
+- The CI and local checks use ESPHome 2026.11.1.
+- The bench OBD listening config and the native API configuration build without compiler warnings.
 - The host tests build the components' plain C++ as C++20, as ESPHome builds the firmware.
 - A simulated day through the tracking filter and encoder checks the data estimates (`tests/test_simulation.py`).
 - CI also builds each example with its optional packages switched on.

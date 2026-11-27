@@ -14,6 +14,19 @@ Quality, security and housekeeping reviews. Repeat when the owner asks for a ful
 8. **Leftovers:** stopgaps that a component has replaced, stale comments (comments explain why, never history).
 9. **Record it:** a dated section below, and changelog lines for anything users notice.
 
+## 2026-11-27: full review (before an alpha release)
+
+The whole project on `dev` after the first week in both cars, with the Home Assistant integration reviewed alongside (raetha/ha-freematics, its own `docs/audits.md`).
+
+- **Pull requests and dependencies:** none open; only `dev` and `main` on the remote (the stale `try/` branches are gone). ESPHome 2026.11.0 → 2026.11.1 (patch: the modem's CFUN=1 when the APN can't be set at CFUN=0, #23238, and a longer watchdog for the TLS handshake in `http_request`, both near this project's paths); PyYAML stays at 6.0.3, which ESPHome 2026.11.1 pins (6.0.4 is out). pytest, ruff, clang-tidy are the latest; clang-format stays at 23.1.3, ESPHome's own. `.clang-format` and `.clang-tidy` match ESPHome's `dev` but for their first line. Actions at their latest tags, pins match.
+- **Upstream:** #23163 (the SIM powered up after five unready polls at CFUN=4) merged into ESPHome's `dev` for 2026.12; #23166 (restart a module whose SIM stays unready) is open. The board package's `AT+CFUN=1` after each sync can go once the dongles run 2026.12 (plan.md).
+- **Security:** CodeQL 2.27.6 (Python, C++, Actions security-and-quality suites): nothing in Python or the workflows; in C++ the same as on 11-20 (card files created without permissions, which FAT has none of; ESPHome's `TAG` statics; two loop counters changed in test tools). The webhook URL reaches no log; `examples/secrets.yaml` is ignored.
+- **Correctness:** host tests, ruff, clang-format, clang-tidy, the markdown, release and example-settings checks pass; every example (with its optional packages) and every component test compiles on ESPHome 2026.11.1. The data simulation still gives 12.3 KB for an hour of driving (the README's 12 KB).
+- **Fixed:** a trip under way at a restart was ended after the stop delay (3 minutes) if no GPS fix had come by then, though first fixes took up to 4 minutes in the cars: a car still driving had its trip split in two. It now waits for the first fix as long as the motion sensor feels the car moving. The detector's resume without a last fast fix, used only by a test since the restart rework, is gone (its test now uses the real path). The uplink's copy of the extras on notes is one helper. A bench config's log line and the co-processor version's text had compiler warnings. The README didn't mention the Home Assistant integration configuration; the plan's status and component table were a week old; the changelog listed fixes to unreleased code and an internal line carried a user-facing behaviour.
+- **Fixed earlier the same day, from the cars' logs:** standby wakes on a 0.5 V rise instead of a fixed 13.2 V; late Traccar answers count and the timeout is 30 s.
+- **Checked and fine:** the board package, `freematics_link`'s fixed command set (nothing reaches the bus), the webhook transport (its socket opens only once the network is up), no history-style comments in code, tests or tools.
+- **Not reviewed again in depth:** `sd_card`, `file_queue`, `file_logger` and `icm426xx`, unchanged since the 11-20 review apart from formatting.
+
 ## 2026-11-20: full review (before the first weekend in the car)
 
 The whole project on `dev`, after phases 1 to 3 worked on the owner's dongle and sleep while parked was built.
