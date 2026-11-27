@@ -103,7 +103,8 @@ int TeltonikaTransport::read_ack_() {
     int accepted = this->window_.accept(buf, len);
     if (accepted >= 0)
       return accepted;
-    ESP_LOGW(TAG, "Reply that answers none of the packets waiting: %s", hex);
+    // Most often a late answer to records a later answer already took
+    ESP_LOGD(TAG, "Reply to none of the packets waiting: %s", hex);
   }
   return -1;
 }
@@ -119,8 +120,9 @@ void TeltonikaTransport::receive() {
 SendResult TeltonikaTransport::poll(uint32_t now) {
   int accepted = this->read_ack_();
   if (accepted >= 0) {
-    if ((size_t) accepted < this->in_flight_)
+    if ((size_t) accepted < this->in_flight_) {
       ESP_LOGD(TAG, "Traccar's answer covers %d of the %u records sent", accepted, (unsigned) this->in_flight_);
+    }
     this->acked_ = accepted;
     this->in_flight_ = 0;
     this->failures_ = 0;

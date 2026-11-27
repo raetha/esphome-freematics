@@ -5,10 +5,17 @@
 #
 # Every standby_check it wakes for a fraction of a second, reads the battery
 # voltage and, unless the car is on, sleeps again before Wi-Fi or the modem
-# start. The car counts as on when the 12 V system is charging (at or above
-# standby_voltage, about 13.2 V: the alternator, or a hybrid's DC-DC converter
-# while the car is on or charging). Every standby_heartbeat it wakes fully to
-# report one record, then sleeps again.
+# start. Awake, the car counts as on while its 12 V system is charging (at or
+# above standby_voltage, about 13.2 V: the alternator, or a hybrid's DC-DC
+# converter while the car is on or charging). Asleep, it counts as on when the
+# voltage rises standby_voltage_rise (0.5 V) above the lowest the checks have
+# read since it slept, its voltage at sleep included: a fixed level is marginal
+# both ways (running cars have read 12.96 V, a plug-in hybrid charging at home
+# sat at 13.2 V for hours), while starting a car lifts its 12 V by 0.7 V or
+# more. A car charging when the dongle went to sleep doesn't wake it until
+# that voltage falls and rises again. Every standby_heartbeat it wakes fully to
+# report one record, then sleeps again; a full wake logs the range of voltages
+# the checks read.
 #
 # Powered over USB instead of the OBD port (the voltage reads below
 # standby_min_voltage), there's no 12 V to tell whether the car is on: it
@@ -44,7 +51,8 @@
 # and the battery_voltage sensor; the SD card packages are synced before sleep.
 
 substitutions:
-  standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging)
+  standby_voltage: "13.2"       # V: at or above, the car is on (its 12 V system is charging) while the dongle is awake
+  standby_voltage_rise: "0.5"   # V: asleep, a rise this big above the lowest voltage since sleeping means the car is on
   standby_min_voltage: "9.0"    # V: below, the dongle is powered over USB, not the OBD port
   standby_on_usb: "true"        # on USB power, sleep once the motion sensor has felt nothing for standby_after; "false": stay awake (a bench)
   standby_after: "600"          # s: car off and still this long, then sleep (the stop record goes out at 180 s)
@@ -78,6 +86,20 @@ globals:
   - id: wake_voltage
     type: float
     initial_value: "NAN"
+  - id: sleep_voltage           # the voltage when it last went to sleep, where the checks' rise is measured from
+    type: float
+    restore_value: true
+    storage: rtc                # kept through deep sleep, without writing to flash
+    initial_value: "NAN"
+  - id: checks_low              # the lowest and highest voltage the checks read while asleep, and how many there were
+    type: float
+    initial_value: "NAN"
+  - id: checks_high
+    type: float
+    initial_value: "NAN"
+  - id: checks_count
+    type: uint32_t
+    initial_value: "0"
   - id: ota_running             # an update is being received: don't sleep
     type: bool
     initial_value: "false"
@@ -105,13 +127,26 @@ esphome:
             // Counts the timer wakes since the last time the device stayed
             // awake; kept in RTC memory through deep sleep.
             static RTC_DATA_ATTR uint32_t checks = 0;
+            // The lowest and highest voltage the checks have read since then
+            static RTC_DATA_ATTR float low = NAN;
+            static RTC_DATA_ATTR float high = NAN;
             bool timer_wake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
             if (timer_wake) {
               id(battery_voltage).update();
               float v = id(battery_voltage).state;
+              if (checks == 0) {
+                low = id(sleep_voltage);
+                high = NAN;
+              }
               // On USB power there's no 12 V to read: only motion or a heartbeat wakes it.
               bool usb = !std::isnan(v) && v < ${standby_min_voltage};
-              bool car_on = std::isnan(v) || (usb ? !${standby_on_usb} : v >= ${standby_voltage});
+              // Starting the car lifts its 12 V above where it rested (the
+              // lowest reading since sleeping, as a battery settles after a drive)
+              bool car_on = std::isnan(v) || (usb ? !${standby_on_usb} : !std::isnan(low) && v >= low + ${standby_voltage_rise});
+              if (!std::isnan(v)) {
+                low = std::isnan(low) ? v : std::min(low, v);
+                high = std::isnan(high) ? v : std::max(high, v);
+              }
               // The motion sensor's wake-on-motion flag (cleared by reading)
               bool moved = id(motion_sensor).woke_by_motion();
               checks++;
@@ -130,6 +165,9 @@ esphome:
               }
               // Logged later (priority -200), once the card's log is running.
               id(wake_voltage) = v;
+              id(checks_low) = low;
+              id(checks_high) = high;
+              id(checks_count) = checks;
               id(wake_reason) = car_on ? 1 : moved ? 2 : 3;
               id(heartbeat_wake) = !car_on && !moved;
             }
@@ -143,8 +181,11 @@ esphome:
       then:
         - lambda: |-
             static const char *const REASONS[] = {"", "the car is on", "the car moved", "heartbeat"};
-            if (id(wake_reason) != 0)
+            if (id(wake_reason) != 0) {
               ESP_LOGI("standby", "Woke: %.2f V, %s", id(wake_voltage), REASONS[id(wake_reason)]);
+              ESP_LOGI("standby", "Asleep %" PRIu32 " min: %.2f V at sleep, checks read %.2f to %.2f V",
+                       id(checks_count) * ${standby_check} / 60, id(sleep_voltage), id(checks_low), id(checks_high));
+            }
 
 interval:
   - interval: 10s
@@ -254,6 +295,9 @@ script:
           timeout: 10min
       - logger.log: { format: "Standby: sleeping", level: INFO }
       - lambda: |-
+          // Where the checks measure the car's rise from (saved to RTC
+          // memory as the device shuts down for sleep)
+          id(sleep_voltage) = id(battery_voltage).state;
           // Hold the power key released, the co-processor out of reset and
           // the buzzer quiet while the ESP32 sleeps (its pins float otherwise).
           gpio_hold_en(GPIO_NUM_27);
