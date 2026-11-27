@@ -1,6 +1,8 @@
 #include "trip_tracker.h"
 
 #include <algorithm>
+#include <cinttypes>
+#include <cstdio>
 
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
@@ -15,26 +17,31 @@ static const char *const TAG = "trip_tracker";
 static uint32_t now_ms() { return App.get_loop_component_start_time(); }
 
 void TripTracker::setup() {
-  // A trip under way when the device restarted (unplugged, a crash, an
-  // update) goes on: once the car has been still for the stop delay after the
-  // first fix, its stop is reported as usual. Without that, the stop would
-  // never come.
-  this->pref_ = global_preferences->make_preference<uint8_t>(fnv1_hash("trip_tracker"));
-  uint8_t on = 0;
-  if (this->pref_.load(&on) && on == 1) {
-    this->detector_.resume();
-    uint32_t delay_s = this->detector_.config().stop_delay_s;
-    ESP_LOGI(TAG, "A trip was under way before the restart: it goes on until the car has been still for %" PRIu32 " s",
-             delay_s);
-    // No fix at all (a garage) leaves nowhere to stop it: it ends unreported.
-    this->set_timeout("resume", delay_s * 1000, [this]() {
-      if (this->last_fix_ms_ == 0 && this->detector_.moving()) {
-        ESP_LOGW(TAG, "No GPS fix since the restart: the trip from before it ends without a stop report");
-        this->detector_.abandon();
-        this->save_trip_(false);
-      }
+  // A trip under way when the device restarted (unplugged, a power cut, a
+  // crash, an update) either went on through the restart or ended before it,
+  // the car parked and then the power cut: the first fix after it tells
+  // (settle_trip_). Until then it counts as under way, so no heartbeat says
+  // otherwise.
+  this->pref_ = global_preferences->make_preference<SavedTrip>(fnv1_hash("trip_tracker_saved"));
+  if (this->pref_.load(&this->trip_) && this->trip_.on && this->trip_.time != 0) {
+    this->trip_unsettled_ = true;
+    this->detector_.resume(this->trip_.time);
+    ESP_LOGI(
+        TAG,
+        "A trip was under way before the restart: it goes on if the car is moving again, or ends where it last was");
+    // No fix at all (a garage): the car hasn't been driven since.
+    this->set_timeout("resume", this->detector_.config().stop_delay_s * 1000, [this]() {
+      if (this->trip_unsettled_)
+        this->settle_trip_(nullptr);
     });
+  } else {
+    this->trip_ = SavedTrip{};
   }
+  // While parked and awake, what the start rule sees, once a minute in the
+  // debug log: a drive that never became a trip can be explained afterwards.
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_DEBUG
+  this->set_interval("status", 60000, [this]() { this->log_parked_status_(); });
+#endif
 #ifdef USE_BINARY_SENSOR
   if (this->motion_ != nullptr) {
     // On while the car is being moved: both edges mark movement (off comes a
@@ -133,6 +140,8 @@ Extras TripTracker::extras() const {
 void TripTracker::process_fix_(Fix fix) {
   if (fix.time == 0 && !this->now(&fix.time))
     return;  // no time yet: nothing useful to record
+  if (this->trip_unsettled_)
+    this->settle_trip_(&fix);
   this->last_fix_ = fix;
   this->last_fix_ms_ = now_ms() | 1;
   // GPS drift while the car sits still (a garage, a house, a desk) never
@@ -178,20 +187,79 @@ void TripTracker::process_fix_(Fix fix) {
   if (trip == Trip::START) {
     ESP_LOGI(TAG, "Trip started %" PRIu32 " s before GPS confirmed it (%s)", fix.time - start.time,
              start.at_first_fix ? "its first fix at moving speed" : "when the motion sensor first felt it");
+    this->trip_ = SavedTrip{fix.time, fix.latitude, fix.longitude, fix.satellites, true};
     this->save_trip_(true);
     this->trip_start_trigger_.trigger();
   } else if (trip == Trip::STOP) {
     ESP_LOGI(TAG, "Trip stopped");
-    this->save_trip_(false);
+    this->trip_ = SavedTrip{};
+    this->save_trip_(true);
     this->trip_stop_trigger_.trigger();
+  } else if (moving && fast) {
+    // Where a restart from now on ends the trip, if the car isn't moving
+    // again after it: kept once a minute, at the preferences' own pace
+    this->trip_ = SavedTrip{fix.time, fix.latitude, fix.longitude, fix.satellites, true};
+    if (now_ms() - this->trip_saved_ms_ >= 60000)
+      this->save_trip_(false);
   }
 }
 
-void TripTracker::save_trip_(bool on) {
-  uint8_t v = on ? 1 : 0;
-  this->pref_.save(&v);
-  // Written at once (twice a trip): a restart soon after must still find it.
-  global_preferences->sync();
+void TripTracker::log_parked_status_() {
+  if (this->detector_.moving())
+    return;
+  char motion[48] = "no motion sensor";
+  if (this->has_motion_sensor()) {
+    if (this->last_motion_ms_ == 0) {
+      snprintf(motion, sizeof(motion), "no movement felt");
+    } else {
+      snprintf(motion, sizeof(motion), "movement felt %" PRIu32 " s ago", (now_ms() - this->last_motion_ms_) / 1000);
+    }
+  }
+  if (this->last_fix_ms_ == 0) {
+    ESP_LOGD(TAG, "Parked: no GPS fix yet; %s", motion);
+    return;
+  }
+  const Fix &f = this->last_fix_;
+  ESP_LOGD(TAG,
+           "Parked: last fix %" PRIu32 " s ago, %.0f km/h, %u satellites, HDOP %.1f, %.0f m from where it's parked, "
+           "%u fixes at moving speed in a row; %s",
+           (now_ms() - this->last_fix_ms_) / 1000, f.speed_kmh, f.satellites, f.hdop / 10.0f,
+           this->detector_.from_parked_m(f.latitude, f.longitude), this->detector_.run_length(), motion);
+}
+
+void TripTracker::save_trip_(bool sync) {
+  this->pref_.save(&this->trip_);
+  this->trip_saved_ms_ = now_ms();
+  // A start or stop is written at once: a restart soon after must still find it.
+  if (sync)
+    global_preferences->sync();
+}
+
+void TripTracker::settle_trip_(const Fix *fix) {
+  this->trip_unsettled_ = false;
+  this->cancel_timeout("resume");
+  uint32_t stop_delay_s = this->detector_.config().stop_delay_s;
+  if (fix != nullptr && ::trackcodec::trip_went_on(fix->time, this->trip_.time, stop_delay_s)) {
+    ESP_LOGI(TAG, "The trip from before the restart goes on");
+    return;  // the detector resumed it from its last fast fix
+  }
+  // The car parked, then the power went: the trip stopped at its last fix at
+  // moving speed, as the detector would have said with the power on.
+  Fix stop{};
+  stop.time = this->trip_.time;
+  stop.latitude = this->trip_.latitude;
+  stop.longitude = this->trip_.longitude;
+  stop.course_deg = 0;
+  stop.altitude_m = NAN;
+  stop.satellites = this->trip_.satellites;
+  ESP_LOGI(TAG, "The trip from before the restart stopped %s: reporting its stop at its last fix at moving speed",
+           fix != nullptr ? "before it (the car isn't moving now)" : "before it (no GPS fix since)");
+  this->detector_.abandon();
+  for (auto *l : this->listeners_)
+    l->on_trip_fix(stop, Trip::STOP, false, false, nullptr);
+  this->trip_ = SavedTrip{};
+  this->save_trip_(true);
+  this->trip_stop_trigger_.trigger();
 }
 
 void TripTracker::note_(uint8_t impact_dg, uint16_t next_report_min) {

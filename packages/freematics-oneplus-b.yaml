@@ -251,13 +251,9 @@ script:
   # library's end() does), so the next press starts it afresh.
   # packages/wifi-first.yaml sets lte_blocked while Wi-Fi is up: then the
   # module isn't started, or the modem component isn't enabled.
-  # packages/gnss-first.yaml sets radios_held until the first GNSS fix.
   - id: modem_power_on
     mode: single
     then:
-      - wait_until:
-          condition:
-            lambda: return !id(radios_held);
       - wait_until:
           condition:
             lambda: return id(lte_blocked);
@@ -310,9 +306,6 @@ globals:
     type: uint32_t
     initial_value: "0"
   - id: lte_blocked              # set by packages/wifi-first.yaml while Wi-Fi is up
-    type: bool
-    initial_value: "false"
-  - id: radios_held              # set by packages/gnss-first.yaml until the first GNSS fix: no Wi-Fi or LTE yet
     type: bool
     initial_value: "false"
   - id: modem_restarted          # the module has been restarted since the ESP32 started

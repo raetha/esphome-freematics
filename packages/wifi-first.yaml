@@ -145,7 +145,7 @@ interval:
                   wifi.enabled:
               - lambda: |-
                   uint32_t now = millis();
-                  return !id(wifi_gave_up) && !id(radios_held) &&
+                  return !id(wifi_gave_up) &&
                          now - id(wifi_moving_ms) >= ${wifi_resume_after} * 1000UL &&
                          (id(wifi_retry_ms) == 0 || static_cast<int32_t>(now - id(wifi_retry_ms)) >= 0);
           then:

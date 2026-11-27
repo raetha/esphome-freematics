@@ -163,8 +163,22 @@ class TripTracker : public Component {
 #endif
   // Whether a trip is under way, kept across restarts: written at each start
   // and stop only.
+  // A trip under way, kept across restarts with its last fix at moving speed,
+  // where it ends if the device restarts after the car parked.
+  struct SavedTrip {
+    uint32_t time;  // the last fast fix's, Unix seconds; 0 with on false
+    float latitude;
+    float longitude;
+    uint8_t satellites;
+    bool on;
+  };
   ESPPreferenceObject pref_;
-  void save_trip_(bool on);
+  SavedTrip trip_{};            // as last saved, or to be saved
+  uint32_t trip_saved_ms_{0};   // when trip_ was last saved
+  bool trip_unsettled_{false};  // trip_ is from before the restart: went on, or ended then?
+  void save_trip_(bool sync);
+  void settle_trip_(const Fix *fix);
+  void log_parked_status_();
   const char *model_{""};
   const char *firmware_{""};
   Fix last_fix_{};

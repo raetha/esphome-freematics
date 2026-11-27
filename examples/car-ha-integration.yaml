@@ -76,9 +76,6 @@ substitutions:
   # standby_report_time: "180"    # s: how long a heartbeat wake waits to report before sleeping again
   # standby_stay_awake: 30min     # the "Stay awake" switch turns itself off after this
 
-  # Testing: radios wait for the first GNSS fix (gnss-first.yaml)
-  # gnss_first_wait: 3min   # the most the radios wait for the first fix
-
   # WireGuard tunnel home (wireguard.yaml)
   # wireguard_address: !secret car1_wg_address        # required with wireguard.yaml: this dongle's tunnel address, e.g. 10.66.0.11
   # wireguard_private_key: !secret car1_wg_private_key  # required with wireguard.yaml: this dongle's private key
@@ -106,8 +103,6 @@ packages:
       # - packages/sd-logs-download.yaml
       # Optional: sleep while parked, waking when the car is turned on or moved
       # - packages/standby.yaml
-      # Testing: Wi-Fi and LTE wait for the first GNSS fix (needs wifi-first and standby)
-      # - packages/gnss-first.yaml
       # Optional: a WireGuard tunnel home on chosen Wi-Fi networks (or cellular),
       # for updates from Device Builder away from home (set the wireguard_*
       # substitutions above)

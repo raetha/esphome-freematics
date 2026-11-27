@@ -33,7 +33,8 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 - One log level for the device, the SD card's log and the co-processor link (`logger_level`, INFO by default): INFO says what happened (trips, what each server took, networks coming and going, sleep and waking) without filling the card; DEBUG adds the detail to troubleshoot.
 - The Home Assistant integration learns each dongle's model and firmware version (`trip_tracker: model:`, ONE+ Model B in the board package; the version is the package's with the commit it was built from, such as `0.1.0+ff6a429`): sent once per boot on the first webhook batch, about 30 bytes.
 - A trip's start is dated when the car started moving, not when GPS confirmed the trip: at the first fix at moving speed, or, while the receiver is still finding its first fix after the dongle wakes, when the motion sensor's run of movement began (at most 5 minutes before GPS saw the car move, `trip_start_motion`). GPS still decides whether there is a trip, so loading or unloading the car never makes one. Trip durations in Home Assistant come out right, and Traccar's trip starts where the car was parked.
-- Testing (`packages/gnss-first.yaml`): at start and on a wake, Wi-Fi and LTE wait for the GPS's first fix (at most `gnss_first_wait`, 3 minutes), to find out whether the cellular module slows the first fix; records queue meanwhile. The log says how long each start's first fix took.
+- The log says how long each start's first GPS fix took.
+- At debug log level, a parked dongle logs once a minute what the trip start rule sees (the last fix's age, speed and satellites, the distance from where it's parked, fast fixes in a row, the last movement felt), so a drive that never became a trip can be explained.
 
 ### Internal
 
@@ -47,7 +48,7 @@ First release: ESPHome on the Freematics ONE+ Model B in place of the stock tele
 
 - The components meant for other boards (SD card, file queue and logger, motion sensor, trips and uplinks) name nothing specific to this dongle, ready to move to a repository of their own and then to ESPHome once the project is stable.
 
-- Trips are decided by a `trip_tracker` component, once for every uplink; each `tracker_uplink` sends through a transport per protocol (Teltonika and Freematics over UDP, the webhook), so a new protocol is a class and a schema entry; the motion sensor is an `icm426xx` component instead of YAML lambdas, with its motion analysis tested on the host. A trip under way survives a restart (unplugged, a crash, an update): once the car has been still for the stop delay after the first fix, its stop is reported to every uplink as usual; with no fix at all it ends unreported.
+- Trips are decided by a `trip_tracker` component, once for every uplink; each `tracker_uplink` sends through a transport per protocol (Teltonika and Freematics over UDP, the webhook), so a new protocol is a class and a schema entry; the motion sensor is an `icm426xx` component instead of YAML lambdas, with its motion analysis tested on the host. A trip under way survives a restart (unplugged, a power cut, a crash, an update): if the car is moving again within the stop delay of the trip's last fix at moving speed, the trip goes on; otherwise (the car parked, then the dongle lost power) its stop is reported, dated at that fix and placed there, as it would have been with the power on.
 
 - The host tests build the components' plain C++ as C++20, as ESPHome builds the firmware.
 - A simulated day through the tracking filter and encoder checks the data estimates (`tests/test_simulation.py`).

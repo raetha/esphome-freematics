@@ -17,7 +17,9 @@
 //     then n lines: fix <time> <speed> <course> | at <time> <speed> <course> <lat> <lon> | tick <time>
 //       | car <time> <0|1> (whether a trip may start; prints NONE)
 //       | resume <time> (a trip was under way before a restart; prints NONE)
+//       | resfrom <time> <last_fast> (the same, its last fast fix known; prints NONE)
 //   -> one decision per line: NONE RECORD START STOP HEARTBEAT
+//   wenton <now> <last_fast> <stop_delay_s>  -> 1 if a trip went on through a restart
 //   startat <first_fast> <motion_start> <max_back_s>  -> when the trip began (trip_start_time)
 //   queue <capacity> <n> then n ops: push <time> | pop <count> | erase <index>
 //   -> after each op: the record times in order, or "-" when empty, and "full" when full
@@ -204,6 +206,11 @@ int main() {
         } else if (!std::strcmp(kind, "resume")) {
           tr.resume();
           d = Decision::NONE;
+        } else if (!std::strcmp(kind, "resfrom")) {  // resfrom <time> <last fast fix>
+          unsigned last;
+          std::scanf("%u", &last);
+          tr.resume(last);
+          d = Decision::NONE;
         } else if (!std::strcmp(kind, "car")) {
           unsigned on;
           std::scanf("%u", &on);
@@ -214,6 +221,10 @@ int main() {
         }
         std::printf("%s\n", names[static_cast<int>(d)]);
       }
+    } else if (!std::strcmp(cmd, "wenton")) {
+      unsigned now, last, delay;
+      std::scanf("%u %u %u", &now, &last, &delay);
+      std::printf("%d\n", trackcodec::trip_went_on(now, last, delay) ? 1 : 0);
     } else if (!std::strcmp(cmd, "startat")) {
       unsigned first, motion, back;
       std::scanf("%u %u %u", &first, &motion, &back);

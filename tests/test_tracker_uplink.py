@@ -766,3 +766,25 @@ def test_motion_long_before_the_first_fast_fix_is_not_the_trip(cli):
     # Loading the car for 10 minutes, then driving off without a pause
     assert cli("startat 2000 1400 300") == ["1700"]
     assert cli("startat 2000 1400 0") == ["2000"]
+
+
+def test_a_trip_goes_on_through_a_restart_only_if_the_car_moves_again_soon(cli):
+    # The car moving again within the stop delay of the last fast fix: the
+    # power blinked while driving
+    assert cli("wenton 1100 1000 180") == ["1"]
+    # Parked, then unplugged or the power cut: it stopped at the last fast fix
+    assert cli("wenton 1180 1000 180") == ["0"]
+    assert cli("wenton 30000 1000 180") == ["0"]
+    # A clock behind the saved fix can't say it ended
+    assert cli("wenton 900 1000 180") == ["1"]
+
+
+def test_a_trip_resumed_from_its_last_fast_fix_stops_on_time(cli):
+    events = [
+        ("resfrom", 1000, 990),
+        ("fix", 1000, 0, 90),  # in traffic after the restart
+        ("fix", 1100, 0, 90),
+        ("fix", 1170, 0, 90),  # 180 s since the last fast fix, before the restart
+        ("fix", 1180, 0, 90),
+    ]
+    assert track(cli, events) == ["NONE", "RECORD", "RECORD", "STOP", "NONE"]

@@ -23,6 +23,14 @@ struct TripConfig {
 
 enum class Trip : uint8_t { NONE, START, STOP };
 
+/// Whether a trip under way before a restart went on through it: the car was
+/// at moving speed again (now, a fix's time) within the stop delay of the
+/// trip's last fast fix. Otherwise the trip ended at that fix, while the device
+/// was off (the car parked, then the dongle unplugged or the power cut).
+inline bool trip_went_on(uint32_t now, uint32_t last_fast, uint32_t stop_delay_s) {
+  return now < last_fast || now - last_fast < stop_delay_s;
+}
+
 /// When a trip GNSS has just confirmed began (Unix seconds). GNSS decides
 /// whether the car is on a trip; when it began is earlier than its confirming
 /// fix: at the first fix of the run at moving speed, or earlier still when the
@@ -51,6 +59,8 @@ class TripDetector {
   bool moving() const { return this->moving_; }
   /// Fixes in a row at moving speed while parked (0 on a trip): 1 at a run's first.
   uint8_t run_length() const { return this->fast_fixes_; }
+  /// Metres from where the car is parked; infinite when unknown.
+  float from_parked_m(float latitude, float longitude) const { return this->distance_m_(latitude, longitude); }
   /// Whether a fix at this speed counts as moving.
   bool fast(float speed_kmh) const { return speed_kmh >= this->config_.moving_speed_kmh; }
 
@@ -58,14 +68,23 @@ class TripDetector {
   /// drift in a garage or a house never starts one. A trip under way isn't affected.
   void set_can_start(bool can) { this->can_start_ = can; }
 
-  /// Carry on a trip that was under way before a restart: the stop delay
-  /// counts from the first fix after it, so a car still parked gets its stop.
+  /// Carry on a trip that was under way before a restart (trip_went_on): the
+  /// stop delay counts from last_fast, the trip's last fix at moving speed.
+  void resume(uint32_t last_fast) {
+    this->moving_ = true;
+    this->fast_fixes_ = 0;
+    this->last_fast_ = last_fast;
+    this->resume_pending_ = false;
+  }
+  /// Carry on a trip that was under way before a restart, its last fast fix
+  /// unknown: the stop delay counts from the first fix after it.
   void resume() {
     this->moving_ = true;
     this->fast_fixes_ = 0;
     this->resume_pending_ = true;
   }
-  /// End a resumed trip that no fix came for: there is nothing to stop it at.
+  /// The trip under way ended without a stop from this detector (it ended
+  /// while the device was off): parked again.
   void abandon() {
     this->moving_ = false;
     this->resume_pending_ = false;
