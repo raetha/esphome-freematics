@@ -12,6 +12,7 @@
 //     -> nothing; every record after it (packet, compact, freematics) carries these
 //   base64 <hex>  -> the base64 text of those bytes
 //   ack <hex> <location_packet_id>  -> accepted count or -1
+//   ackwin <n>, then sent/ack lines (AckWindow) -> per ack, records taken or -1
 //   unix <ddmmyy> <hhmmsscc>        -> Unix seconds
 //   track <moving_speed> <stop_delay> <moving_interval> <turn_angle> <min_turn> <heartbeat> <n>
 //     then n lines: fix <time> <speed> <course> | at <time> <speed> <course> <lat> <lon> | tick <time>
@@ -178,6 +179,23 @@ int main() {
       for (size_t i = 0; i < n; i++)
         std::sscanf(hex + 2 * i, "%2hhx", &b[i]);
       std::printf("%d\n", parse_ack(b, n, lpid));
+    } else if (!std::strcmp(cmd, "ackwin")) {
+      // ackwin <n>, then n lines: sent <location_packet_id> <count> | ack <id> <accepted>
+      unsigned n;
+      std::scanf("%u", &n);
+      AckWindow w;
+      for (unsigned i = 0; i < n; i++) {
+        char op[8];
+        unsigned id, count;
+        std::scanf("%7s %u %u", op, &id, &count);
+        if (!std::strcmp(op, "sent")) {
+          w.sent(static_cast<uint8_t>(id), static_cast<uint8_t>(count));
+          std::printf("-\n");
+        } else {
+          uint8_t b[7] = {0x00, 0x05, 0x00, 0x00, 0x01, static_cast<uint8_t>(id), static_cast<uint8_t>(count)};
+          std::printf("%d\n", w.accept(b, sizeof(b)));
+        }
+      }
     } else if (!std::strcmp(cmd, "track")) {
       TrackerConfig c;
       unsigned stop, interval, min_turn, hb, start_fixes, n;

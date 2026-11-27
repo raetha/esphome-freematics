@@ -788,3 +788,28 @@ def test_a_trip_resumed_from_its_last_fast_fix_stops_on_time(cli):
         ("fix", 1180, 0, 90),
     ]
     assert track(cli, events) == ["NONE", "RECORD", "RECORD", "STOP", "NONE"]
+
+
+def ackwin(cli, ops):
+    out = cli(
+        f"ackwin {len(ops)}\n" + "\n".join(" ".join(map(str, o)) for o in ops) + "\n"
+    )
+    return [int(x) for x, o in zip(out, ops, strict=True) if o[0] == "ack"]
+
+
+def test_a_late_answer_to_an_earlier_packet_counts(cli):
+    # Packet 3 went unanswered for 30 s; packet 4 went with the same 6
+    # records and 2 more; then packet 3's answer arrives
+    ops = [("sent", 3, 6), ("sent", 4, 8), ("ack", 3, 6), ("ack", 4, 8)]
+    # The 6 are taken; packet 4's answer then covers only the 2 still queued
+    assert ackwin(cli, ops) == [6, 2]
+
+
+def test_an_answer_to_the_latest_packet_covers_the_earlier_ones(cli):
+    ops = [("sent", 3, 6), ("sent", 4, 8), ("ack", 4, 8), ("ack", 3, 6)]
+    assert ackwin(cli, ops) == [8, -1]  # packet 3's records went with packet 4's
+
+
+def test_the_window_forgets_the_oldest_packets(cli):
+    ops = [("sent", i, 5) for i in range(1, 6)] + [("ack", 1, 5), ("ack", 2, 5)]
+    assert ackwin(cli, ops) == [-1, 5]

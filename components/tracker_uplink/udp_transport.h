@@ -49,13 +49,16 @@ class TeltonikaTransport final : public UdpTransport {
   void dump_config() override;
   size_t send(const RecordQueue &records, size_t max) override;
   SendResult poll(uint32_t now) override;
+  size_t acked() const override { return this->acked_; }
   void receive() override;
 
  protected:
-  /// Reads replies; returns the records the expected acknowledgement accepted, or -1.
+  /// Reads replies; returns the records an answer to a packet in window_ accepted, or -1.
   int read_ack_();
 
-  uint32_t ack_timeout_{15000};
+  ::trackcodec::AckWindow window_;
+  size_t acked_{0};  // records the last ACKED covered
+  uint32_t ack_timeout_{30000};
   uint16_t packet_id_{0};
   uint8_t location_packet_id_{0};
   size_t in_flight_{0};

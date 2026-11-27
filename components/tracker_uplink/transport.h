@@ -41,6 +41,9 @@ class Transport {
   virtual size_t send(const RecordQueue &records, size_t max) = 0;
   /// While a send awaits its answer: called each loop until it isn't PENDING.
   virtual SendResult poll(uint32_t now) = 0;
+  /// After ACKED: how many records from the front of the queue it covered,
+  /// when fewer than the last send's (a late answer to an earlier packet).
+  virtual size_t acked() const { return SIZE_MAX; }
   /// Each loop while the network is up: read what the server sent unasked.
   virtual void receive() {}
   /// The device's model and firmware version, for protocols that carry them

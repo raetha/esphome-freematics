@@ -80,6 +80,7 @@ size_t TeltonikaTransport::send(const RecordQueue &records, size_t max) {
   if (!this->send_bytes_(this->buf_, len))
     return 0;
   this->packet_id_++;
+  this->window_.sent(this->location_packet_id_, static_cast<uint8_t>(count));
   this->in_flight_ = count;
   this->sent_at_ = now_ms();
   ESP_LOGD(TAG, "Sent %u records in %u bytes", (unsigned) count, (unsigned) len);
@@ -95,29 +96,32 @@ int TeltonikaTransport::read_ack_() {
     char hex[3 * sizeof(buf) + 1] = {};
     for (ssize_t j = 0; j < len && j < (ssize_t) sizeof(buf); j++)
       snprintf(hex + 3 * j, 4, "%02X ", buf[j]);
-    if (this->in_flight_ == 0) {
+    if (this->window_.empty()) {
       ESP_LOGD(TAG, "Reply with nothing waiting for one: %s", hex);
       continue;
     }
-    int accepted = ::trackcodec::parse_ack(buf, len, this->location_packet_id_);
+    int accepted = this->window_.accept(buf, len);
     if (accepted >= 0)
       return accepted;
-    ESP_LOGW(TAG, "Reply that isn't the acknowledgement expected (location packet %u): %s", this->location_packet_id_,
-             hex);
+    ESP_LOGW(TAG, "Reply that answers none of the packets waiting: %s", hex);
   }
   return -1;
 }
 
 void TeltonikaTransport::receive() {
-  if (this->in_flight_ == 0)
+  // While packets wait for an answer, even given up on (three tries, a lost
+  // connection), a late one stays in the socket for the next send's poll:
+  // the records it took are still first in the queue then.
+  if (this->in_flight_ == 0 && this->window_.empty())
     this->read_ack_();  // logs what arrives unasked
 }
 
 SendResult TeltonikaTransport::poll(uint32_t now) {
   int accepted = this->read_ack_();
   if (accepted >= 0) {
-    if ((size_t) accepted != this->in_flight_)
-      ESP_LOGW(TAG, "Traccar accepted %d of %u records", accepted, (unsigned) this->in_flight_);
+    if ((size_t) accepted < this->in_flight_)
+      ESP_LOGD(TAG, "Traccar's answer covers %d of the %u records sent", accepted, (unsigned) this->in_flight_);
+    this->acked_ = accepted;
     this->in_flight_ = 0;
     this->failures_ = 0;
     this->location_packet_id_++;

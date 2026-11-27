@@ -10,6 +10,7 @@
 // No ESPHome dependencies: tests/cpp builds this on the host.
 
 #include <cmath>
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <cstddef>
@@ -191,5 +192,54 @@ inline int parse_ack(const uint8_t *buf, size_t len, uint8_t location_packet_id)
     return -1;
   return buf[6];
 }
+
+/// The packets sent since the last acknowledgement. Each starts with the
+/// records at the front of the queue, so an answer to any of them, however
+/// late, says those records arrived: with spotty coverage an answer often
+/// comes after the packet has gone again, and counting it saves sending the
+/// records a third time.
+class AckWindow {
+ public:
+  static constexpr size_t SIZE = 4;  // the oldest is forgotten beyond this
+
+  void sent(uint8_t location_packet_id, uint8_t count) {
+    if (this->n_ == SIZE) {
+      for (size_t i = 1; i < SIZE; i++)
+        this->packets_[i - 1] = this->packets_[i];
+      this->n_--;
+    }
+    this->packets_[this->n_++] = {location_packet_id, count};
+  }
+  bool empty() const { return this->n_ == 0; }
+  void clear() { this->n_ = 0; }
+
+  /// The records an answer accepted from the front of the queue, or -1 if it
+  /// answers none of these packets. The others' counts drop by as many, as
+  /// their first records are no longer queued; a packet left with none goes.
+  int accept(const uint8_t *buf, size_t len) {
+    for (size_t i = 0; i < this->n_; i++) {
+      int acked = parse_ack(buf, len, this->packets_[i].id);
+      if (acked < 0)
+        continue;
+      uint8_t taken = std::min<uint8_t>(static_cast<uint8_t>(acked), this->packets_[i].count);
+      size_t kept = 0;
+      for (size_t j = 0; j < this->n_; j++) {
+        if (j != i && this->packets_[j].count > taken)
+          this->packets_[kept++] = {this->packets_[j].id, static_cast<uint8_t>(this->packets_[j].count - taken)};
+      }
+      this->n_ = kept;
+      return taken;
+    }
+    return -1;
+  }
+
+ protected:
+  struct Packet {
+    uint8_t id;
+    uint8_t count;
+  };
+  Packet packets_[SIZE]{};  // NOLINT(cppcoreguidelines-avoid-c-arrays)
+  size_t n_{0};
+};
 
 }  // namespace trackcodec

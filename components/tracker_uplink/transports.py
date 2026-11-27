@@ -102,7 +102,7 @@ PROTOCOLS: dict[str, Protocol] = {
     "teltonika": Protocol(
         schema={
             **_udp_schema(TeltonikaTransport, 5027),
-            cv.Optional(CONF_ACK_TIMEOUT, default="15s"): cv.All(
+            cv.Optional(CONF_ACK_TIMEOUT, default="30s"): cv.All(
                 cv.positive_time_period_milliseconds,
                 cv.Range(min=cv.TimePeriod(seconds=2)),
             ),

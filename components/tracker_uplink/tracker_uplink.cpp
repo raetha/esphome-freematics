@@ -179,7 +179,7 @@ void TrackerUplink::loop() {
       case SendResult::PENDING:
         return;
       case SendResult::ACKED: {
-        size_t n = std::min(this->in_flight_, this->backlog_.memory().size());
+        size_t n = std::min({this->in_flight_, this->transport_->acked(), this->backlog_.memory().size()});
         this->backlog_.acknowledged(n);
         this->records_sent_ += n;
         if (this->transport_->acknowledged()) {
