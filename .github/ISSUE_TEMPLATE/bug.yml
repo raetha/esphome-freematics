@@ -1,0 +1,46 @@
+name: Problem report
+description: Something the dongle does wrong, or doesn't do.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. Issues here are public, so please check what you paste.
+        The logs this firmware writes are meant to be safe to post: they hold no GPS coordinates and no Traccar device ID. They do show your Wi-Fi network names and your Traccar server's name (ESPHome's own Wi-Fi and network messages print them): replace those with placeholders such as `HOME-WIFI` and `my-traccar-server` before posting, the same placeholder for the same name everywhere.
+        Never attach the card's record queues (`traccar.bin` and the other `.bin` files): they hold every position the dongle has recorded.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, what happened instead, and when (date and local time, so it can be found in the log).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Firmware
+      description: The "Firmware from raetha/esphome-freematics ..." line at the top of the log, and your ESPHome version.
+    validations:
+      required: true
+  - type: dropdown
+    id: configuration
+    attributes:
+      label: Configuration
+      options:
+        - Traccar (car-traccar.yaml)
+        - Home Assistant integration (car-ha-integration.yaml)
+        - Home Assistant native API (car-home-assistant.yaml)
+        - Something else (say below)
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Car and power
+      description: The car (make, model, year), how the dongle is powered (OBD port or USB), and any packages or settings you changed from the example.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The SD card's `esphome.log` (or the download from `http://<device>.local/log`) covering the problem, at the default DEBUG level, with the names above replaced. Attach the file if it's long.
+      render: text

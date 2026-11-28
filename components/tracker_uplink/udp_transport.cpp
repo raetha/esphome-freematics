@@ -58,12 +58,13 @@ size_t UdpTransport::take_(const RecordQueue &records, size_t max) {
 // ---- Teltonika GH3000 ----
 
 void TeltonikaTransport::dump_config() {
-  ESP_LOGCONFIG(TAG,
-                "  Protocol: Teltonika GH3000 over UDP, acknowledged\n"
-                "  Server: %s:%u\n"
-                "  Device ID: %s\n"
-                "  Acknowledgement timeout: %" PRIu32 " s",
-                this->host_.c_str(), this->port_, this->device_id_.c_str(), this->ack_timeout_ / 1000);
+  ESP_LOGCONFIG(
+      TAG,
+      "  Protocol: Teltonika GH3000 over UDP, acknowledged\n"
+      "  Server: %s:%u\n"
+      "  Device ID: set, %u characters (not logged: it's all a server needs to take positions as this device)\n"
+      "  Acknowledgement timeout: %" PRIu32 " s",
+      this->host_.c_str(), this->port_, (unsigned) this->device_id_.size(), this->ack_timeout_ / 1000);
 }
 
 size_t TeltonikaTransport::send(const RecordQueue &records, size_t max) {
@@ -146,12 +147,13 @@ SendResult TeltonikaTransport::poll(uint32_t now) {
 // ---- Freematics text ----
 
 void FreematicsTransport::dump_config() {
-  ESP_LOGCONFIG(TAG,
-                "  Protocol: Freematics text over UDP, unacknowledged\n"
-                "  Server: %s:%u\n"
-                "  Device ID: %s\n"
-                "  Login answered: %s",
-                this->host_.c_str(), this->port_, this->device_id_.c_str(), YESNO(this->login_answered_));
+  ESP_LOGCONFIG(
+      TAG,
+      "  Protocol: Freematics text over UDP, unacknowledged\n"
+      "  Server: %s:%u\n"
+      "  Device ID: set, %u characters (not logged: it's all a server needs to take positions as this device)\n"
+      "  Login answered: %s",
+      this->host_.c_str(), this->port_, (unsigned) this->device_id_.size(), YESNO(this->login_answered_));
 }
 
 void FreematicsTransport::receive() {

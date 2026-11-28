@@ -28,6 +28,10 @@ Each build fetches the packages again (`refresh: 0s`), so a new build picks up c
 
 Changes on `dev` to what a device config pulls in are published as pre-releases tagged `<version>-dev.<n>`. To try one, set the package's `ref:` and the external component's `@...` to that tag (or to `dev` for the latest) and install. To go back, set them to `main` (the latest release) and install again. Until the first release, the examples use `dev`.
 
+## Problems
+
+Open an [issue](https://github.com/raetha/esphome-freematics/issues/new/choose) with the SD card's log (`esphome.log`). The log holds no GPS coordinates or Traccar device ID, but it does name your Wi-Fi networks and Traccar server: the form says what to replace before posting, and never to attach the card's `.bin` record queues, which hold every position.
+
 ## Development
 
 See [docs/development.md](https://github.com/raetha/esphome-freematics/blob/main/docs/development.md) and [CONTRIBUTING.md](https://github.com/raetha/esphome-freematics/blob/main/CONTRIBUTING.md).

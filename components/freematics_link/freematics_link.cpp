@@ -85,8 +85,9 @@ void FreematicsLink::dump_config() {
                 this->rx_total_, this->gnss_replies_, this->gnss_misses_, this->gnss_restart_ / 60000,
                 this->gnss_restarts_);
   if (this->fix_now_) {
-    ESP_LOGCONFIG(TAG, "  GNSS fix: %u satellites, %.5f, %.5f", this->last_fix_.satellites, this->last_fix_.latitude,
-                  this->last_fix_.longitude);
+    // No coordinates: logs are meant to be safe to post
+    ESP_LOGCONFIG(TAG, "  GNSS fix: %u satellites, HDOP %.1f", this->last_fix_.satellites,
+                  this->last_fix_.hdop / 10.0f);
   } else {
     ESP_LOGCONFIG(TAG, "  GNSS fix: none");
   }
