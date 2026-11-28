@@ -8,7 +8,7 @@ Run [ESPHome](https://esphome.io) on the [Freematics ONE+ Model B](https://freem
 
 - A Freematics ONE+ Model B with a cellular module (SIM7070G or SIM7600) and a data SIM.
 - ESPHome 2026.11 or later (the `modem` component).
-- One of: a Traccar server with UDP port 5027 (Teltonika) open; Home Assistant with the [Freematics integration](https://github.com/raetha/ha-freematics), reached through Home Assistant Cloud or its own HTTPS address; or Home Assistant 2026.10 or later over the native API, with a WireGuard server at home (far more data). [docs/configurations.md](https://github.com/raetha/esphome-freematics/blob/main/docs/configurations.md) compares the two, including data use.
+- One of: a Traccar server with UDP port 5027 (Teltonika) open; Home Assistant with the [Freematics integration](https://github.com/raetha/ha-freematics), reached through Home Assistant Cloud or its own HTTPS address; or Home Assistant 2026.10 or later over the native API, with a WireGuard server at home (far more data; untested, and may be removed). [docs/configurations.md](https://github.com/raetha/esphome-freematics/blob/main/docs/configurations.md) compares the two, including data use.
 
 ## Install
 

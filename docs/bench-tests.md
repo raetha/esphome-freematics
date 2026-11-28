@@ -4,6 +4,8 @@ One thing per test, in order: each one either passes or narrows down the next. F
 
 Results so far are in [plan.md](plan.md) → Log.
 
+**Still to do before 0.1.0:** test 7f (the second modem fix, by Claude Code); a drive in each car on the current `dev` (update the integration first): every trip in Traccar or Home Assistant, "Woke: …, the car is on" and the "Asleep … checks read …" line in the card's log, and on Emily's dongle a drive that ends with the USB power cut, whose stop should land a few minutes after parking, not at the next drive. Then tell Claude the release is ready.
+
 The log is at INFO unless set otherwise: trips, sends, networks and sleep, with warnings. While testing, set `logger_level: DEBUG` in the device config's substitutions: the live log, the card's log and the co-processor's all follow it.
 
 ## 0. Bring the pasted config up to date
@@ -149,9 +151,34 @@ Add `packages/sd-logs-download.yaml` (after `sd-logs.yaml`) and `sd_log_password
 
 ## 7f. The upstream modem fixes (on the bench)
 
-esphome/esphome#23163 (a SIM7070's SIM powered up with `AT+CFUN=1` when it stays unready at CFUN=4) is merged for ESPHome 2026.12. #23166 (restart a module whose SIM stays unready) passed this bench test on 2026-11-25, then ESPHome's reviewer changed it (a resync before the restart, a 10 s wait after it, a restart when SIM queries keep timing out), so it gets tested again: by Claude Code on a computer with the dongle on USB, building the pull request's branch of raetha/esphome with ESPHome's own `hardware-test` skill, and the same flow on ESPHome's `dev` as the control. The module loses its SIM without anyone touching it: restarted with `AT+CFUN=1,1` a few seconds after a PWRKEY press has started it, it reports the SIM missing until its next restart.
+esphome/esphome#23163 (a SIM7070's SIM powered up with `AT+CFUN=1` when it stays unready at CFUN=4) is merged for ESPHome 2026.12. #23166 (restart a module whose SIM stays unready) passed this bench test on 2026-11-25, then ESPHome's reviewer changed it (a resync before the restart, a 10 s wait after it, a restart when SIM queries keep timing out, a log line when a restart is refused), so it gets tested again. Claude Code does it on your computer with the dongle on USB, using ESPHome's own `hardware-test` skill (in ESPHome's checkout), and runs the same flow on ESPHome's `dev` as the control. Nobody touches the SIM: restarted with `AT+CFUN=1,1` a few seconds after a PWRKEY press has started it, the module reports the SIM missing until its next restart, as on the drive that lost it.
 
-**Send back:** the results comment the session writes, for the pull request.
+1. The dongle on USB at the desk, not in a car. Claude Code installed ([quickstart](https://docs.claude.com/en/docs/claude-code/quickstart)).
+2. In a terminal:
+
+   ```
+   git clone https://github.com/raetha/esphome.git esphome-pr-test
+   cd esphome-pr-test
+   git checkout modem-sim-restart
+   python3 -m venv venv && source venv/bin/activate && pip install -e .
+   claude
+   ```
+
+3. Paste this prompt, then approve its commands as it asks, and unplug and replug the dongle when it asks:
+
+   ```
+   Use the hardware-test skill to test PR esphome/esphome#23166 (this checkout, branch modem-sim-restart) on a Freematics ONE+ Model B connected over USB. Build from this checkout; the control is the same flow on upstream dev at the PR's merge base, with a different name:.
+
+   Board: ESP32 (esp32dev, 16 MB flash, ESP-IDF). SIM7070G modem: model SIM7070, rx_pin GPIO35, tx_pin GPIO2, 115200 baud, APN hologram, enable_on_boot: false, reboot_timeout: 0s. It is powered on by a PWRKEY pulse on GPIO27: drive it high for 200 ms, wait, and repeat until the module answers, then modem.enable. Reference for the board: https://github.com/raetha/esphome-freematics/blob/dev/packages/freematics-oneplus-b.yaml and docs/hardware.md there. logger level DEBUG. Never drive GPIO12, and never send anything to the vehicle-bus co-processor on GPIO13/14 (it isn't needed for this test).
+
+   Reproduce the fault without touching the SIM: a few seconds after the PWRKEY press starts the module, send AT+CFUN=1,1 once (in an on_sync automation, guarded by a global so it happens only once per boot). Restarted while reading its SIM, the module reports the SIM missing (+CPIN: NOT INSERTED or SIM failure) until its next restart. Run each build at least twice from a full power cycle of the dongle (ask me to unplug and replug it), for 10 minutes each.
+
+   Show for each run: whether and when the PR restarted the module, the wait after the restart, whether the SIM became READY and the modem attached and got an IP, and what dev did with the same fault. Keep cellular data to a minimum: no traffic beyond attaching.
+
+   Ask me for Wi-Fi credentials and put them in a secrets.yaml in a scratch directory outside the checkout. Commit nothing and post nothing: write the results comment in the skill's format to a file and show it to me.
+   ```
+
+**Send back:** the results comment the session writes, to check before posting it on the pull request.
 
 ## 7c. Listening to the OBD port (vehicle data, step one)
 

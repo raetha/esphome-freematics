@@ -1,6 +1,9 @@
 # One car reporting live to Home Assistant over the native API, through a
 # WireGuard tunnel home (docs/configurations.md, docs/networking.md).
 #
+# UNTESTED, AND MAY BE REMOVED: it builds but has never run on a dongle. For
+# Home Assistant, examples/car-ha-integration.yaml is the tested configuration.
+#
 # Paste this whole file into a new device in ESPHome Device Builder, change the
 # substitutions below, and install. Everything else comes from GitHub.
 # Secrets it uses (Device Builder -> Secrets): wifi_ssid, wifi_password,

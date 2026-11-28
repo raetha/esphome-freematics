@@ -83,6 +83,8 @@ Home Assistant can't store states with past timestamps: records sent late (after
 
 ## Home Assistant
 
+**Untested, and may be removed:** this configuration builds but has never run on a dongle, and it may not earn its place next to the integration. Compared with the integration it is live only (records made without a signal never reach Home Assistant, where the integration gets the whole trip once the dongle reconnects), needs a template device tracker, and has no heading, altitude, HDOP, moving state, trip start and stop events, trip statistics, or last and next report times.
+
 The native API with `outgoing_connection`: the device dials Home Assistant, so HA never needs to reach it behind the carrier's NAT, and no MQTT broker is involved. Simple and live, but every update is its own small exchange and HA keeps the connection alive with pings, so it costs far more data than the Traccar configuration, and it has no timestamps, so nothing can be replayed. Fine on Wi-Fi or with a generous data plan; details in [networking.md](networking.md).
 
 ## Later
