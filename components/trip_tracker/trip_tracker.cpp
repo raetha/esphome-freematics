@@ -23,9 +23,9 @@ void TripTracker::setup() {
   // (settle_trip_). Until then it counts as under way, so no heartbeat says
   // otherwise.
   this->pref_ = global_preferences->make_preference<SavedTrip>(fnv1_hash("trip_tracker_saved"));
-  if (this->pref_.load(&this->trip_) && this->trip_.on && this->trip_.time != 0) {
+  if (this->pref_.load(&this->trip_) && this->trip_.on && this->trip_.last_fast != 0) {
     this->trip_unsettled_ = true;
-    this->detector_.resume(this->trip_.time);
+    this->detector_.resume(this->trip_.last_fast);
     ESP_LOGI(
         TAG,
         "A trip was under way before the restart: it goes on if the car is moving again, or ends where it last was");
@@ -192,10 +192,10 @@ void TripTracker::process_fix_(Fix fix) {
     this->trip_ = SavedTrip{};
     this->save_trip_(true);
     this->trip_stop_trigger_.trigger();
-  } else if (moving && fast) {
+  } else if (moving) {
     // Where a restart from now on ends the trip, if the car isn't moving
     // again after it: kept once a minute, at the preferences' own pace
-    this->trip_ = SavedTrip{fix.time, fix.latitude, fix.longitude, fix.satellites, true};
+    this->trip_ = SavedTrip{fast ? fix.time : this->trip_.last_fast, fix.latitude, fix.longitude, fix.satellites, true};
     if (now_ms() - this->trip_saved_ms_ >= 60000)
       this->save_trip_(false);
   }
@@ -236,20 +236,23 @@ void TripTracker::settle_trip_(const Fix *fix) {
   this->trip_unsettled_ = false;
   this->cancel_timeout("resume");
   uint32_t stop_delay_s = this->detector_.config().stop_delay_s;
-  if (fix != nullptr && ::trackcodec::trip_went_on(fix->time, this->trip_.time, stop_delay_s)) {
+  if (fix != nullptr && ::trackcodec::trip_went_on(fix->time, this->trip_.last_fast, stop_delay_s)) {
     ESP_LOGI(TAG, "The trip from before the restart goes on");
     return;  // the detector resumed it from its last fast fix
   }
-  // The car parked, then the power went: the trip stopped at its last fix at
-  // moving speed, as the detector would have said with the power on.
+  // The car parked, then the power went: the stop is what the detector would
+  // have reported with the power on, the stop delay after the last fix at
+  // moving speed, where the car was last seen. Dated then, it follows every
+  // record sent before the power went (servers ignore a stop older than the
+  // newest position they have).
   Fix stop{};
-  stop.time = this->trip_.time;
+  stop.time = this->trip_.last_fast + stop_delay_s;
   stop.latitude = this->trip_.latitude;
   stop.longitude = this->trip_.longitude;
   stop.course_deg = 0;
   stop.altitude_m = NAN;
   stop.satellites = this->trip_.satellites;
-  ESP_LOGI(TAG, "The trip from before the restart stopped %s: reporting its stop at its last fix at moving speed",
+  ESP_LOGI(TAG, "The trip from before the restart stopped %s: reporting its stop where the car was last seen",
            fix != nullptr ? "before it (the car isn't moving now)" : "before it (no GPS fix since)");
   this->detector_.abandon();
   for (auto *l : this->listeners_)

@@ -25,8 +25,8 @@ enum class Trip : uint8_t { NONE, START, STOP };
 
 /// Whether a trip under way before a restart went on through it: the car was
 /// at moving speed again (now, a fix's time) within the stop delay of the
-/// trip's last fast fix. Otherwise the trip ended at that fix, while the device
-/// was off (the car parked, then the dongle unplugged or the power cut).
+/// trip's last fast fix. Otherwise the trip ended while the device was off (the
+/// car parked, then the dongle unplugged or the power cut).
 inline bool trip_went_on(uint32_t now, uint32_t last_fast, uint32_t stop_delay_s) {
   return now < last_fast || now - last_fast < stop_delay_s;
 }

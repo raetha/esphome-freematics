@@ -161,13 +161,12 @@ class TripTracker : public Component {
 #ifdef USE_TIME
   time::RealTimeClock *time_{nullptr};
 #endif
-  // Whether a trip is under way, kept across restarts: written at each start
-  // and stop only.
-  // A trip under way, kept across restarts with its last fix at moving speed,
-  // where it ends if the device restarts after the car parked.
+  // A trip under way, kept across restarts: when it was last at moving speed
+  // and where it was last seen, where it ends if the device restarts after
+  // the car parked.
   struct SavedTrip {
-    uint32_t time;  // the last fast fix's, Unix seconds; 0 with on false
-    float latitude;
+    uint32_t last_fast;  // the last fix at moving speed, Unix seconds; 0 with on false
+    float latitude;      // the last fix, at any speed
     float longitude;
     uint8_t satellites;
     bool on;
